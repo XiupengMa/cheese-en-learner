@@ -5,3 +5,5 @@ export const MAX_TEXT_LENGTH = 20_000;
 export const MAX_MESSAGE_LENGTH = 8_000;
 // App-generated (entry summary / text + translation) — truncated, not rejected.
 export const MAX_CONTEXT_LENGTH = 24_000;
+// Text-to-speech input (example sentences and short fragments).
+export const MAX_TTS_LENGTH = 1_000;

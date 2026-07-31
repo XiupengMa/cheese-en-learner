@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface AudioButtonProps {
   /** Recorded pronunciation audio URL, if available. */
@@ -11,44 +11,142 @@ interface AudioButtonProps {
   className?: string;
 }
 
+// Chrome loads the voice list asynchronously: getVoices() returns [] until
+// `voiceschanged` fires. Cache the best English voice at module level so the
+// first click already has it. Prefer local voices — Chrome's remote (network)
+// voices can fail silently, which reads as a dead button.
+let cachedVoice: SpeechSynthesisVoice | null = null;
+
+function pickVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  const english = voices.filter((v) => v.lang.replace("_", "-").startsWith("en"));
+  const us = english.filter((v) => v.lang.replace("_", "-").startsWith("en-US"));
+  return (
+    us.find((v) => v.localService) ??
+    us[0] ??
+    english.find((v) => v.localService) ??
+    english[0] ??
+    null
+  );
+}
+
+function warmVoices() {
+  if (cachedVoice || !("speechSynthesis" in window)) return;
+  cachedVoice = pickVoice();
+  if (!cachedVoice) {
+    window.speechSynthesis.addEventListener(
+      "voiceschanged",
+      () => {
+        cachedVoice = pickVoice();
+      },
+      { once: true }
+    );
+  }
+}
+
+// Synthesized speech from /api/tts, cached per text so replaying a sentence
+// doesn't re-bill the TTS API. Returns null on any failure (caller falls back
+// to browser speech synthesis).
+const ttsCache = new Map<string, string>();
+
+async function fetchTtsUrl(text: string): Promise<string | null> {
+  const cached = ttsCache.get(text);
+  if (cached) return cached;
+  try {
+    const res = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    const url = URL.createObjectURL(await res.blob());
+    if (ttsCache.size >= 100) ttsCache.clear();
+    ttsCache.set(text, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export function AudioButton({ src, text, title, className }: AudioButtonProps) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Keep a live reference to the utterance: Chrome garbage-collects otherwise
+  // unreferenced utterances mid-speech, cutting the audio off.
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Bumped on every click; lets an in-flight TTS fetch detect it was cancelled.
+  const playSeq = useRef(0);
+
+  useEffect(() => {
+    warmVoices();
+  }, []);
 
   function speak() {
     if (!("speechSynthesis" in window)) {
       setPlaying(false);
       return;
     }
-    window.speechSynthesis.cancel();
+    const synth = window.speechSynthesis;
+
     const utterance = new SpeechSynthesisUtterance(text);
+    utteranceRef.current = utterance;
     utterance.lang = "en-US";
-    const voice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang === "en-US" || v.lang.startsWith("en_US"));
-    if (voice) utterance.voice = voice;
+    if (!cachedVoice) cachedVoice = pickVoice();
+    if (cachedVoice) utterance.voice = cachedVoice;
     utterance.rate = 0.95;
+    utterance.volume = 1;
     utterance.onend = () => setPlaying(false);
     utterance.onerror = () => setPlaying(false);
-    window.speechSynthesis.speak(utterance);
+
+    // Chrome quirks: an utterance queued right after cancel() can be silently
+    // dropped, so only cancel when something is actually queued, and give the
+    // engine a beat before speaking. resume() unsticks a lingering paused
+    // state, in which speak() queues but nothing plays.
+    const pending = synth.speaking || synth.pending;
+    if (pending) synth.cancel();
+    window.setTimeout(
+      () => {
+        synth.speak(utterance);
+        synth.resume();
+      },
+      pending ? 60 : 0
+    );
+  }
+
+  function playUrl(url: string, onFail: () => void) {
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => setPlaying(false);
+    audio.onerror = onFail;
+    audio.play().catch(onFail);
+  }
+
+  // Synthesized speech: OpenAI TTS via /api/tts, browser TTS as fallback.
+  async function speakSynthesized(seq: number) {
+    const url = await fetchTtsUrl(text);
+    if (playSeq.current !== seq) return; // stopped while fetching
+    if (url) {
+      playUrl(url, speak);
+    } else {
+      speak();
+    }
   }
 
   function play() {
+    playSeq.current += 1;
     if (playing) {
       audioRef.current?.pause();
+      audioRef.current = null;
       window.speechSynthesis?.cancel();
       setPlaying(false);
       return;
     }
     setPlaying(true);
     if (src) {
-      const audio = new Audio(src);
-      audioRef.current = audio;
-      audio.onended = () => setPlaying(false);
-      audio.onerror = () => speak();
-      audio.play().catch(() => speak());
+      // Recorded pronunciation first; synthesized speech if it fails.
+      playUrl(src, () => void speakSynthesized(playSeq.current));
     } else {
-      speak();
+      void speakSynthesized(playSeq.current);
     }
   }
 

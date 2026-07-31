@@ -29,7 +29,9 @@ The app is behind a login: sign-up requires an invite code
 - [Better Auth](https://www.better-auth.com/) accounts (email + password,
   invite-only sign-up) stored in Postgres via [Drizzle](https://orm.drizzle.team/)
 - Pronunciation audio from the [Free Dictionary API](https://dictionaryapi.dev/)
-  (US recording preferred), with browser speech synthesis as fallback
+  (US recording preferred); example sentences read aloud with OpenAI TTS
+  (`gpt-4o-mini-tts`, needs `OPENAI_API_KEY`), with browser speech synthesis
+  as the final fallback
 
 ## Local development
 
