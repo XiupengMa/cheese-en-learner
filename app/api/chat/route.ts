@@ -1,6 +1,7 @@
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { chatSystem } from "@/lib/prompts";
+import { getSession, unauthorized } from "@/lib/session";
 import type { ChatMessage, LearnMode } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -9,6 +10,9 @@ const MAX_MESSAGES = 40;
 
 export async function POST(req: Request) {
   try {
+    const session = await getSession(req);
+    if (!session) return unauthorized();
+
     const body = await req.json();
     const model = String(body.model || DEFAULT_MODEL);
     const mode: LearnMode = body.mode === "teacher" ? "teacher" : "dictionary";

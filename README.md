@@ -19,39 +19,66 @@ A **Debug** toggle in the header reveals the raw request/response exchanged
 between this server and the LLM provider (exact payload, usage, latency) under
 each result.
 
+The app is behind a login: sign-up requires an invite code
+(`SIGNUP_INVITE_CODE`), so only people you invite can create an account.
+
 ## Tech
 
 - Next.js (App Router) + TypeScript + Tailwind CSS
 - `@anthropic-ai/sdk` and `openai` on the server, streaming responses
+- [Better Auth](https://www.better-auth.com/) accounts (email + password,
+  invite-only sign-up) stored in Postgres via [Drizzle](https://orm.drizzle.team/)
 - Pronunciation audio from the [Free Dictionary API](https://dictionaryapi.dev/)
   (US recording preferred), with browser speech synthesis as fallback
 
 ## Local development
 
+You need a Postgres database. The easiest way is Docker:
+
 ```bash
-cp .env.example .env.local   # then fill in your key(s)
+docker run -d --name cheese-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=cheese -e POSTGRES_DB=cheese postgres:17-alpine
+```
+
+Then:
+
+```bash
+cp .env.example .env.local   # then fill in the values (see below)
 npm install
+npm run db:push              # create/update the database tables
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000, create your account with the invite code you set,
+and sign in.
 
 ## Environment variables
 
-| Variable            | Purpose                          |
-| ------------------- | -------------------------------- |
-| `ANTHROPIC_API_KEY` | Required to use Claude models    |
-| `OPENAI_API_KEY`    | Required to use GPT models       |
+| Variable             | Purpose                                                        |
+| -------------------- | -------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`  | Required to use Claude models                                  |
+| `OPENAI_API_KEY`     | Required to use GPT models                                     |
+| `DATABASE_URL`       | Postgres connection string (accounts, sessions; history later) |
+| `BETTER_AUTH_SECRET` | Session signing secret (`openssl rand -base64 32`)             |
+| `SIGNUP_INVITE_CODE` | Code required to create an account                             |
 
-You only need the key(s) for the provider(s) you use.
+You only need the LLM key(s) for the provider(s) you use. For the Docker
+setup above, `DATABASE_URL` is
+`postgresql://postgres:cheese@localhost:5432/cheese`.
 
 ## Deploying to Vercel
 
 1. Push this repo to GitHub and import it in Vercel (framework preset: Next.js —
    auto-detected, no config needed).
-2. In **Project Settings → Environment Variables**, add `ANTHROPIC_API_KEY`
-   and/or `OPENAI_API_KEY`.
-3. Deploy.
+2. Create a Postgres database (e.g. Neon via the Vercel Marketplace) and use
+   its **pooled** connection string as `DATABASE_URL`.
+3. In **Project Settings → Environment Variables**, add `ANTHROPIC_API_KEY`
+   and/or `OPENAI_API_KEY`, plus `DATABASE_URL`, `BETTER_AUTH_SECRET`, and
+   `SIGNUP_INVITE_CODE`.
+4. Run `npm run db:push` once against the production `DATABASE_URL` to create
+   the tables (temporarily set it in `.env.local`, or run
+   `DATABASE_URL=... npm run db:push`).
+5. Deploy.
 
 > Note: keep this app personal — use personal API keys and don't connect it to
 > any work data or services.

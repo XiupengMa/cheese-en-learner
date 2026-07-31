@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Dictionary } from "@/components/Dictionary";
 import { ModelSelect } from "@/components/ModelSelect";
 import { Teacher } from "@/components/Teacher";
+import { authClient } from "@/lib/auth-client";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import type { LearnMode } from "@/lib/types";
@@ -13,10 +15,17 @@ const TABS: { id: LearnMode; label: string }[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const { data: session } = authClient.useSession();
   const [model, setModel] = useLocalStorage("cheese.model", DEFAULT_MODEL);
   const [tab, setTab] = useLocalStorage("cheese.tab", "dictionary");
   const [debugStr, setDebugStr] = useLocalStorage("cheese.debug", "0");
   const debug = debugStr === "1";
+
+  async function signOut() {
+    await authClient.signOut();
+    router.replace("/login");
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50 dark:bg-neutral-950">
@@ -40,6 +49,22 @@ export default function Home() {
               Debug
             </label>
             <ModelSelect value={model} onChange={setModel} />
+            {session && (
+              <div className="flex items-center gap-2 text-sm">
+                <span
+                  className="max-w-24 truncate text-neutral-500"
+                  title={session.user.email}
+                >
+                  {session.user.name}
+                </span>
+                <button
+                  onClick={signOut}
+                  className="text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-200"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

@@ -1,14 +1,18 @@
-import type { LLMDebug, StreamEvent } from "./types";
+import type { LLMDebug, Phonetics, StreamEvent } from "./types";
+
+export interface StreamHandlers {
+  onDelta: (text: string) => void;
+  onDone?: (debug: LLMDebug) => void;
+  onPhonetics?: (phonetics: Phonetics) => void;
+}
 
 /**
- * Reads an NDJSON stream from the API routes, invoking `onDelta` for each text
- * chunk and `onDone` with the debug record when the stream completes.
- * Throws if the server reports a mid-stream error.
+ * Reads an NDJSON stream from the API routes, dispatching each event to its
+ * handler. Throws if the server reports a mid-stream error.
  */
 export async function readEventStream(
   body: ReadableStream<Uint8Array>,
-  onDelta: (text: string) => void,
-  onDone?: (debug: LLMDebug) => void
+  handlers: StreamHandlers
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -26,9 +30,11 @@ export async function readEventStream(
       if (!line) continue;
       const event = JSON.parse(line) as StreamEvent;
       if (event.type === "delta") {
-        onDelta(event.text);
+        handlers.onDelta(event.text);
       } else if (event.type === "done") {
-        onDone?.(event.debug);
+        handlers.onDone?.(event.debug);
+      } else if (event.type === "phonetics") {
+        handlers.onPhonetics?.({ ipa: event.ipa, audioUrl: event.audioUrl });
       } else if (event.type === "error") {
         throw new Error(event.message);
       }

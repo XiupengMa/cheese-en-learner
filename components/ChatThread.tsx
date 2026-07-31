@@ -62,9 +62,8 @@ export function ChatThread({
           const data = await res.json().catch(() => null);
           throw new Error(data?.error ?? `Request failed (${res.status})`);
         }
-        await readEventStream(
-          res.body,
-          (chunk) => {
+        await readEventStream(res.body, {
+          onDelta: (chunk) => {
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -73,8 +72,8 @@ export function ChatThread({
             });
             bottomRef.current?.scrollIntoView({ block: "nearest" });
           },
-          (dbg) => setDebugLogs((prev) => [...prev, dbg])
-        );
+          onDone: (dbg) => setDebugLogs((prev) => [...prev, dbg]),
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
         // drop the empty assistant placeholder if nothing streamed

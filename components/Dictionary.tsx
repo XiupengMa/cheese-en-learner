@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import type { DictionaryEntry } from "@/lib/types";
+import { useMemo, useState } from "react";
+import { parseDictionaryText } from "@/lib/dictionaryParse";
+import { readEventStream } from "@/lib/streamClient";
+import type { LLMDebug, Phonetics } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
@@ -18,37 +20,58 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+type Status = "idle" | "streaming" | "done";
+
 export function Dictionary({ model, debug }: { model: string; debug?: boolean }) {
   const [term, setTerm] = useState("");
-  const [entry, setEntry] = useState<DictionaryEntry | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [lookedUp, setLookedUp] = useState("");
+  const [raw, setRaw] = useState("");
+  const [phonetics, setPhonetics] = useState<Phonetics | null>(null);
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [lookupDebug, setLookupDebug] = useState<LLMDebug | null>(null);
+
+  const entry = useMemo(() => parseDictionaryText(raw), [raw]);
 
   async function lookup(e: React.FormEvent) {
     e.preventDefault();
     const q = term.trim();
-    if (!q || loading) return;
-    setLoading(true);
+    if (!q || status === "streaming") return;
+    setLookedUp(q);
+    setRaw("");
+    setPhonetics(null);
+    setLookupDebug(null);
     setError(null);
+    setStatus("streaming");
+    let received = false;
     try {
       const res = await fetch("/api/dictionary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ term: q, model }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? `Lookup failed (${res.status})`);
-      setEntry(data as DictionaryEntry);
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? `Lookup failed (${res.status})`);
+      }
+      await readEventStream(res.body, {
+        onDelta: (chunk) => {
+          received = true;
+          setRaw((prev) => prev + chunk);
+        },
+        onDone: (dbg) => setLookupDebug(dbg),
+        onPhonetics: (p) => setPhonetics(p),
+      });
+      setStatus("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lookup failed. Please try again.");
-    } finally {
-      setLoading(false);
+      setStatus(received ? "done" : "idle");
     }
   }
 
-  const chatContext = entry
-    ? `Word/phrase: ${entry.term}\nPronunciation: ${entry.ipa}\nMeaning: ${entry.meaning}\nChinese: ${entry.chinese}`
-    : "";
+  const showCard = lookedUp !== "" && status !== "idle";
+  const ipa = phonetics?.ipa || entry.ipa;
+  const chatContext = `Word/phrase: ${lookedUp}\nPronunciation: ${ipa}\nMeaning: ${entry.meaning}\nChinese: ${entry.chinese}`;
 
   return (
     <div>
@@ -62,10 +85,10 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
         />
         <button
           type="submit"
-          disabled={loading || !term.trim()}
+          disabled={status === "streaming" || !term.trim()}
           className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:opacity-40"
         >
-          {loading ? "Looking up…" : "Look up"}
+          {status === "streaming" ? "Looking up…" : "Look up"}
         </button>
       </form>
 
@@ -75,32 +98,37 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
         </p>
       )}
 
-      {loading && !entry && (
-        <div className="mt-6 animate-pulse space-y-3 rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="h-6 w-40 rounded bg-neutral-200 dark:bg-neutral-800" />
-          <div className="h-4 w-full rounded bg-neutral-100 dark:bg-neutral-800/60" />
-          <div className="h-4 w-3/4 rounded bg-neutral-100 dark:bg-neutral-800/60" />
-        </div>
-      )}
-
-      {entry && (
+      {showCard && (
         <>
           <article className="mt-6 space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
             <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 className="text-2xl font-bold">{entry.term}</h2>
-              {entry.ipa && (
-                <span className="font-mono text-sm text-neutral-500">{entry.ipa}</span>
-              )}
+              <h2 className="text-2xl font-bold">{lookedUp}</h2>
+              {ipa && <span className="font-mono text-sm text-neutral-500">{ipa}</span>}
               <AudioButton
-                src={entry.audioUrl}
-                text={entry.term}
+                src={phonetics?.audioUrl}
+                text={lookedUp}
                 title="Play US pronunciation"
               />
+              {status === "streaming" && (
+                <span
+                  className="ml-auto h-2 w-2 animate-pulse rounded-full bg-amber-500"
+                  aria-label="Loading"
+                />
+              )}
             </header>
 
-            <Section title="Meaning">
-              <Markdown>{entry.meaning}</Markdown>
-            </Section>
+            {!entry.meaning && status === "streaming" && (
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 w-full rounded bg-neutral-100 dark:bg-neutral-800/60" />
+                <div className="h-4 w-3/4 rounded bg-neutral-100 dark:bg-neutral-800/60" />
+              </div>
+            )}
+
+            {entry.meaning && (
+              <Section title="Meaning">
+                <Markdown>{entry.meaning}</Markdown>
+              </Section>
+            )}
 
             {entry.background && (
               <Section title="Background & culture">
@@ -108,9 +136,11 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
               </Section>
             )}
 
-            <Section title="Chinese">
-              <Markdown>{entry.chinese}</Markdown>
-            </Section>
+            {entry.chinese && (
+              <Section title="Chinese">
+                <Markdown>{entry.chinese}</Markdown>
+              </Section>
+            )}
 
             {entry.examples.length > 0 && (
               <Section title="Examples">
@@ -131,18 +161,18 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
             )}
           </article>
 
-          {debug && entry.debug && (
-            <DebugPanel logs={[entry.debug]} title="Lookup debug" />
-          )}
+          {debug && lookupDebug && <DebugPanel logs={[lookupDebug]} title="Lookup debug" />}
 
-          <ChatThread
-            key={entry.term}
-            model={model}
-            mode="dictionary"
-            context={chatContext}
-            debug={debug}
-            placeholder={`Ask more about “${entry.term}”…`}
-          />
+          {status === "done" && (
+            <ChatThread
+              key={lookedUp}
+              model={model}
+              mode="dictionary"
+              context={chatContext}
+              debug={debug}
+              placeholder={`Ask more about “${lookedUp}”…`}
+            />
+          )}
         </>
       )}
     </div>

@@ -1,11 +1,15 @@
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
+import { getSession, unauthorized } from "@/lib/session";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
+    const session = await getSession(req);
+    if (!session) return unauthorized();
+
     const body = await req.json();
     const text = String(body.text ?? "").trim();
     const model = String(body.model || DEFAULT_MODEL);

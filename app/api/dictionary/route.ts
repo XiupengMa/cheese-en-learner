@@ -1,26 +1,23 @@
-import { completeText } from "@/lib/llm";
+import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { DICTIONARY_SYSTEM } from "@/lib/prompts";
-import type { DictionaryEntry, DictionaryExample } from "@/lib/types";
+import { getSession, unauthorized } from "@/lib/session";
+import type { Phonetics } from "@/lib/types";
 
 export const maxDuration = 60;
 
-interface Phonetics {
-  ipa?: string;
-  audioUrl?: string;
-}
-
 // Free Dictionary API sources most audio from Wiktionary; prefer the US recording.
 async function fetchPronunciation(term: string): Promise<Phonetics> {
+  const empty: Phonetics = { ipa: "", audioUrl: null };
   const word = term.trim().toLowerCase();
-  if (/\s/.test(word)) return {}; // single words only
+  if (/\s/.test(word)) return empty; // single words only
 
   try {
     const res = await fetch(
       `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
       { signal: AbortSignal.timeout(4000) }
     );
-    if (!res.ok) return {};
+    if (!res.ok) return empty;
     const data = (await res.json()) as Array<{
       phonetic?: string;
       phonetics?: Array<{ text?: string; audio?: string }>;
@@ -30,28 +27,19 @@ async function fetchPronunciation(term: string): Promise<Phonetics> {
     const us = withAudio.find((p) => p.audio!.includes("-us.")) ?? withAudio[0];
     const withText = phonetics.find((p) => p.text);
     return {
-      ipa: us?.text || withText?.text || data?.[0]?.phonetic,
-      audioUrl: us?.audio,
+      ipa: us?.text || withText?.text || data?.[0]?.phonetic || "",
+      audioUrl: us?.audio ?? null,
     };
   } catch {
-    return {};
+    return empty;
   }
-}
-
-function parseEntryJson(raw: string): Record<string, unknown> {
-  let text = raw.trim();
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) text = fence[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1) {
-    throw new Error("The model did not return a valid dictionary entry. Please try again.");
-  }
-  return JSON.parse(text.slice(start, end + 1));
 }
 
 export async function POST(req: Request) {
   try {
+    const session = await getSession(req);
+    if (!session) return unauthorized();
+
     const body = await req.json();
     const term = String(body.term ?? "").trim();
     const model = String(body.model || DEFAULT_MODEL);
@@ -59,32 +47,44 @@ export async function POST(req: Request) {
       return Response.json({ error: "Please enter a word or phrase." }, { status: 400 });
     }
 
-    const [result, phonetics] = await Promise.all([
-      completeText({
-        model,
-        system: DICTIONARY_SYSTEM,
-        messages: [{ role: "user", content: term }],
-        effort: "low",
-      }),
-      fetchPronunciation(term),
-    ]);
+    const llmStream = await streamLLM({
+      model,
+      system: DICTIONARY_SYSTEM,
+      messages: [{ role: "user", content: term }],
+      effort: "low",
+    });
 
-    const parsed = parseEntryJson(result.text);
-    const examples: DictionaryExample[] = Array.isArray(parsed.examples)
-      ? (parsed.examples as DictionaryExample[]).filter((ex) => ex && ex.en)
-      : [];
+    // Pass LLM events through, and inject a "phonetics" event as soon as the
+    // (parallel) pronunciation lookup resolves. Each enqueue is a complete
+    // NDJSON line, so interleaving is safe.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const pronunciation = fetchPronunciation(term)
+          .then((p) => {
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ type: "phonetics", ...p }) + "\n")
+            );
+          })
+          .catch(() => {});
 
-    const entry: DictionaryEntry = {
-      term,
-      ipa: phonetics.ipa || String(parsed.ipa ?? ""),
-      audioUrl: phonetics.audioUrl ?? null,
-      meaning: String(parsed.meaning ?? ""),
-      background: String(parsed.background ?? ""),
-      chinese: String(parsed.chinese ?? ""),
-      examples,
-      debug: result.debug,
-    };
-    return Response.json(entry);
+        const reader = llmStream.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+        await pronunciation;
+        controller.close();
+      },
+      cancel() {
+        void llmStream.cancel();
+      },
+    });
+
+    return new Response(stream, {
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Lookup failed. Please try again.";
     return Response.json({ error: message }, { status: 500 });

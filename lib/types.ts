@@ -12,15 +12,18 @@ export interface DictionaryExample {
   zh: string;
 }
 
+/** Assembled client-side from the streamed marker-format text. */
 export interface DictionaryEntry {
-  term: string;
   ipa: string;
-  audioUrl: string | null;
   meaning: string;
   background: string;
   chinese: string;
   examples: DictionaryExample[];
-  debug?: LLMDebug;
+}
+
+export interface Phonetics {
+  ipa: string;
+  audioUrl: string | null;
 }
 
 /** A faithful record of one round trip between this server and the LLM provider. */
@@ -42,4 +45,5 @@ export interface LLMDebug {
 export type StreamEvent =
   | { type: "delta"; text: string }
   | { type: "done"; debug: LLMDebug }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | ({ type: "phonetics" } & Phonetics);

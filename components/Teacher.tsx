@@ -61,11 +61,10 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? `Translation failed (${res.status})`);
       }
-      await readEventStream(
-        res.body,
-        (chunk) => setTranslation((prev) => prev + chunk),
-        (dbg) => setTranslationDebug(dbg)
-      );
+      await readEventStream(res.body, {
+        onDelta: (chunk) => setTranslation((prev) => prev + chunk),
+        onDone: (dbg) => setTranslationDebug(dbg),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Translation failed. Please try again.");
     } finally {
