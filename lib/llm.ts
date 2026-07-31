@@ -1,13 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { getModel } from "./models";
+import { getModel, type ModelOption } from "./models";
 import type { ChatMessage, LLMDebug, StreamEvent } from "./types";
+
+export type Effort = "low" | "medium" | "high";
 
 interface LLMParams {
   model: string;
   system: string;
   messages: ChatMessage[];
   maxTokens?: number;
+  /**
+   * Reasoning effort. These are quick, well-specified tasks, so routes default
+   * to "low" — it cuts thinking time dramatically with little quality loss.
+   * Ignored on models that don't support the parameter.
+   */
+  effort?: Effort;
 }
 
 export interface LLMResult {
@@ -35,22 +43,35 @@ function openaiClient(): OpenAI {
   return new OpenAI({ apiKey });
 }
 
+function anthropicPayload(
+  m: ModelOption,
+  { system, messages, maxTokens, effort }: Required<Pick<LLMParams, "system" | "messages">> & { maxTokens: number; effort?: Effort }
+) {
+  return {
+    model: m.id,
+    max_tokens: maxTokens,
+    system,
+    messages,
+    ...(m.supportsEffort && effort ? { output_config: { effort } } : {}),
+  };
+}
+
+function openaiMessages(system: string, messages: ChatMessage[]) {
+  return [{ role: "system" as const, content: system }, ...messages];
+}
+
 export async function completeText({
   model,
   system,
   messages,
   maxTokens = 16000,
+  effort,
 }: LLMParams): Promise<LLMResult> {
   const m = getModel(model);
   const started = Date.now();
 
   if (m.provider === "anthropic") {
-    const payload = {
-      model: m.id,
-      max_tokens: maxTokens,
-      system,
-      messages,
-    };
+    const payload = anthropicPayload(m, { system, messages, maxTokens, effort });
     const response = await anthropicClient().messages.create(payload);
     const text = response.content
       .filter((block) => block.type === "text")
@@ -68,7 +89,8 @@ export async function completeText({
   const payload = {
     model: m.id,
     max_completion_tokens: maxTokens,
-    messages: [{ role: "system" as const, content: system }, ...messages],
+    ...(m.supportsReasoningEffort && effort ? { reasoning_effort: effort } : {}),
+    messages: openaiMessages(system, messages),
   };
   const completion = await openaiClient().chat.completions.create(payload);
   const text = completion.choices[0]?.message?.content ?? "";
@@ -92,6 +114,7 @@ export async function streamLLM({
   system,
   messages,
   maxTokens = 16000,
+  effort,
 }: LLMParams): Promise<ReadableStream<Uint8Array>> {
   const m = getModel(model);
   const encoder = new TextEncoder();
@@ -101,12 +124,7 @@ export async function streamLLM({
     controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
 
   if (m.provider === "anthropic") {
-    const payload = {
-      model: m.id,
-      max_tokens: maxTokens,
-      system,
-      messages,
-    };
+    const payload = anthropicPayload(m, { system, messages, maxTokens, effort });
     const stream = anthropicClient().messages.stream(payload);
     return new ReadableStream({
       async start(controller) {
@@ -148,7 +166,8 @@ export async function streamLLM({
     stream: true as const,
     stream_options: { include_usage: true },
     max_completion_tokens: maxTokens,
-    messages: [{ role: "system" as const, content: system }, ...messages],
+    ...(m.supportsReasoningEffort && effort ? { reasoning_effort: effort } : {}),
+    messages: openaiMessages(system, messages),
   };
   const completion = await openaiClient().chat.completions.create(payload);
   return new ReadableStream({

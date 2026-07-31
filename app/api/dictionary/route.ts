@@ -64,6 +64,7 @@ export async function POST(req: Request) {
         model,
         system: DICTIONARY_SYSTEM,
         messages: [{ role: "user", content: term }],
+        effort: "low",
       }),
       fetchPronunciation(term),
     ]);

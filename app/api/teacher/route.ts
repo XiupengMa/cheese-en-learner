@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       model,
       system: TEACHER_SYSTEM,
       messages: [{ role: "user", content: text }],
+      effort: "low",
     });
     return new Response(stream, {
       headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },

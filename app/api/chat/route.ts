@@ -27,6 +27,7 @@ export async function POST(req: Request) {
       model,
       system: chatSystem(mode, context),
       messages,
+      effort: "low",
     });
     return new Response(stream, {
       headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },

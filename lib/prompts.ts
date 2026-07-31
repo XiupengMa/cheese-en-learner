@@ -13,7 +13,7 @@ Given a word or phrase, respond with ONLY a JSON object (no markdown fences, no 
   ]
 }
 
-Give 3 to 5 examples. Keep the whole entry focused and practical for a learner.`;
+Give exactly 3 examples. Keep the entry compact and practical for a learner: short paragraphs or bullets, no filler, the whole entry under roughly 300 words.`;
 
 export const TEACHER_SYSTEM = `You are a professional English-to-Chinese translator and English teacher. The user is a native Chinese speaker learning English.
 
