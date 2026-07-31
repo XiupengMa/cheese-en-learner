@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { parseDictionaryText } from "@/lib/dictionaryParse";
+import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import type { LLMDebug, Phonetics } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
@@ -80,6 +81,7 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           placeholder="Type or paste a word or phrase…"
+          maxLength={MAX_TERM_LENGTH}
           autoFocus
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
         />

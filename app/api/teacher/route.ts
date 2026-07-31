@@ -1,3 +1,4 @@
+import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
@@ -15,6 +16,12 @@ export async function POST(req: Request) {
     const model = String(body.model || DEFAULT_MODEL);
     if (!text) {
       return Response.json({ error: "Please enter some text to translate." }, { status: 400 });
+    }
+    if (text.length > MAX_TEXT_LENGTH) {
+      return Response.json(
+        { error: `That text is too long (${MAX_TEXT_LENGTH.toLocaleString()} characters max). Try a shorter passage.` },
+        { status: 400 }
+      );
     }
 
     const stream = await streamLLM({

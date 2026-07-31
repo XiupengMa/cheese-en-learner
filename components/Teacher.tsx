@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import type { LLMDebug } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
@@ -111,6 +112,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={5}
+          maxLength={MAX_TEXT_LENGTH}
           placeholder="Paste an English sentence or paragraphs to study…"
           className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base leading-relaxed shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
         />
@@ -169,7 +171,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
                   type="button"
                   onClick={() =>
                     askAboutSelection(
-                      `Explain this part of the text: “${popover.text}” — its meaning, grammar, and usage.`
+                      `Explain this part of the text: “${popover.text.slice(0, 2000)}” — its meaning, grammar, and usage.`
                     )
                   }
                   className="mb-2 w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-600"
@@ -181,7 +183,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
                     e.preventDefault();
                     if (!question.trim()) return;
                     askAboutSelection(
-                      `About the selected part “${popover.text}”: ${question.trim()}`
+                      `About the selected part “${popover.text.slice(0, 2000)}”: ${question.trim()}`
                     );
                   }}
                   className="flex gap-1.5"

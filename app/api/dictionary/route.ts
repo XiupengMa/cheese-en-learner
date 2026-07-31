@@ -1,3 +1,4 @@
+import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { DICTIONARY_SYSTEM } from "@/lib/prompts";
@@ -45,6 +46,12 @@ export async function POST(req: Request) {
     const model = String(body.model || DEFAULT_MODEL);
     if (!term) {
       return Response.json({ error: "Please enter a word or phrase." }, { status: 400 });
+    }
+    if (term.length > MAX_TERM_LENGTH) {
+      return Response.json(
+        { error: `That looks too long for a lookup (${MAX_TERM_LENGTH} characters max). Try the Teacher tab for full sentences.` },
+        { status: 400 }
+      );
     }
 
     const llmStream = await streamLLM({

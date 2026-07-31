@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 // Better Auth core tables (spec from getAuthTables() for better-auth 1.6).
 // Property names must match Better Auth's field names; column names are
@@ -43,6 +43,16 @@ export const account = pgTable("account", {
   password: text("password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull(),
+});
+
+// Storage for Better Auth's rate limiter (rateLimit.storage: "database") —
+// in-memory counters don't survive across serverless invocations. The unique
+// key is load-bearing: the limiter's create-then-catch races depend on it.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
 export const verification = pgTable("verification", {

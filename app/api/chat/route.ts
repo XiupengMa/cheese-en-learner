@@ -1,3 +1,4 @@
+import { MAX_CONTEXT_LENGTH, MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { chatSystem } from "@/lib/prompts";
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const model = String(body.model || DEFAULT_MODEL);
     const mode: LearnMode = body.mode === "teacher" ? "teacher" : "dictionary";
-    const context = String(body.context ?? "");
+    const context = String(body.context ?? "").slice(0, MAX_CONTEXT_LENGTH);
     const rawMessages: ChatMessage[] = Array.isArray(body.messages) ? body.messages : [];
 
     const messages: ChatMessage[] = rawMessages
@@ -25,6 +26,12 @@ export async function POST(req: Request) {
 
     if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
       return Response.json({ error: "Please enter a question." }, { status: 400 });
+    }
+    if (messages.some((m) => m.content.length > MAX_MESSAGE_LENGTH)) {
+      return Response.json(
+        { error: `Messages are limited to ${MAX_MESSAGE_LENGTH.toLocaleString()} characters.` },
+        { status: 400 }
+      );
     }
 
     const stream = await streamLLM({

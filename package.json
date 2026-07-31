@@ -10,6 +10,10 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
+  "overrides": {
+    "sharp": "0.35.3",
+    "postcss": "8.5.25"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@tailwindcss/typography": "^0.5.20",
