@@ -12,13 +12,17 @@ export const auth = betterAuth({
   },
   hooks: {
     // Sign-up is invite-only: the client sends `inviteCode` alongside the
-    // regular sign-up fields, checked here against SIGNUP_INVITE_CODE.
+    // regular sign-up fields, checked here against SIGNUP_INVITE_CODE
+    // (one or more valid codes, comma-separated).
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path !== "/sign-up/email") return;
-      const expected = process.env.SIGNUP_INVITE_CODE;
+      const validCodes = (process.env.SIGNUP_INVITE_CODE ?? "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
       const given =
         typeof ctx.body?.inviteCode === "string" ? ctx.body.inviteCode.trim() : "";
-      if (!expected || given !== expected) {
+      if (validCodes.length === 0 || !validCodes.includes(given)) {
         throw new APIError("FORBIDDEN", {
           message: "Invalid invite code. Ask the person who runs this app for one.",
         });
