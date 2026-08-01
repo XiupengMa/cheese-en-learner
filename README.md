@@ -11,7 +11,10 @@ A personal, AI-powered English learning app for native Chinese speakers. Two mod
 - **🎓 Teacher** — paste a sentence or paragraphs and get a full Chinese
   translation. Select any part of the original text to get a popup with an
   **✨ Explain this** shortcut or a box to ask your own question about that
-  fragment. A follow-up box below digs deeper into the whole text.
+  fragment. Selections snap outward to whole words — no need to aim for word
+  edges — and each selected word gets a rounded highlight that stays visible
+  while the popup is open and while the answer streams (Esc or click away to
+  deselect). A follow-up box below digs deeper into the whole text.
 
 Both modes are powered by your choice of Claude or GPT models (selector in the
 header; the choice is remembered in `localStorage`). All LLM calls happen on the
