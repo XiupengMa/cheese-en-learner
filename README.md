@@ -1,4 +1,6 @@
-# 🧀 Cheese · English Learner
+<p align="center">
+  <img src="docs/hero.svg" alt="🧀 Cheese · English Learner — an AI-powered English dictionary &amp; reading teacher for Chinese speakers" width="100%">
+</p>
 
 A personal, AI-powered English learning app for native Chinese speakers. Two modes:
 
