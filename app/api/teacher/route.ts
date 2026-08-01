@@ -1,8 +1,12 @@
+import { db } from "@/lib/db";
+import { lookup } from "@/lib/db/schema";
+import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
 import { getSession, unauthorized } from "@/lib/session";
+import type { LookupResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
@@ -30,7 +34,22 @@ export async function POST(req: Request) {
       messages: [{ role: "user", content: text }],
       effort: "low",
     });
-    return new Response(stream, {
+
+    const logged = withHistorySave(stream, async (translation) => {
+      const id = crypto.randomUUID();
+      const response: LookupResponse = { translation };
+      await db.insert(lookup).values({
+        id,
+        userId: session.user.id,
+        mode: "teacher",
+        input: text,
+        response,
+        model,
+      });
+      return id;
+    });
+
+    return new Response(logged, {
       headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
     });
   } catch (err) {

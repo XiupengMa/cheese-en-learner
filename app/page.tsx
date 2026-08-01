@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dictionary } from "@/components/Dictionary";
+import { Dictionary, type DictionaryHandle } from "@/components/Dictionary";
+import { History } from "@/components/History";
 import { ModelSelect } from "@/components/ModelSelect";
-import { Teacher } from "@/components/Teacher";
+import { Teacher, type TeacherHandle } from "@/components/Teacher";
 import { authClient } from "@/lib/auth-client";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { readUrlQuery } from "@/lib/urlQuery";
 import { useLocalStorage } from "@/lib/useLocalStorage";
-import type { LearnMode } from "@/lib/types";
+import type { LearnMode, LookupRecord } from "@/lib/types";
 
-const TABS: { id: LearnMode; label: string }[] = [
+type TabId = LearnMode | "history";
+
+const TABS: { id: TabId; label: string }[] = [
   { id: "dictionary", label: "📖 Dictionary" },
   { id: "teacher", label: "🎓 Teacher" },
+  { id: "history", label: "🕘 History" },
 ];
 
 export default function Home() {
@@ -28,6 +32,16 @@ export default function Home() {
     mode: LearnMode;
     query: string;
   } | null>(null);
+
+  const dictionaryRef = useRef<DictionaryHandle>(null);
+  const teacherRef = useRef<TeacherHandle>(null);
+
+  // Reopen a stored entry instantly in its panel — no LLM call.
+  function openHistoryEntry(record: LookupRecord) {
+    const panel = record.mode === "teacher" ? teacherRef : dictionaryRef;
+    panel.current?.restore(record);
+    setTab(record.mode);
+  }
 
   // Deep links: /?mode=dict&query=hello opens that tab and runs the query.
   // Registered after the useLocalStorage effects above so the stored model is
@@ -123,9 +137,10 @@ export default function Home() {
           ))}
         </nav>
 
-        {/* Both panels stay mounted so switching tabs never loses your work */}
+        {/* All panels stay mounted so switching tabs never loses your work */}
         <div className={tab === "dictionary" ? "" : "hidden"}>
           <Dictionary
+            ref={dictionaryRef}
             model={model}
             debug={debug}
             initialQuery={urlQuery?.mode === "dictionary" ? urlQuery.query : undefined}
@@ -133,10 +148,14 @@ export default function Home() {
         </div>
         <div className={tab === "teacher" ? "" : "hidden"}>
           <Teacher
+            ref={teacherRef}
             model={model}
             debug={debug}
             initialQuery={urlQuery?.mode === "teacher" ? urlQuery.query : undefined}
           />
+        </div>
+        <div className={tab === "history" ? "" : "hidden"}>
+          <History active={tab === "history"} onOpen={openHistoryEntry} />
         </div>
       </main>
 

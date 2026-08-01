@@ -4,6 +4,8 @@ export interface StreamHandlers {
   onDelta: (text: string) => void;
   onDone?: (debug: LLMDebug) => void;
   onPhonetics?: (phonetics: Phonetics) => void;
+  /** The server saved this response to history under the given id. */
+  onSaved?: (id: string) => void;
 }
 
 /**
@@ -35,6 +37,8 @@ export async function readEventStream(
         handlers.onDone?.(event.debug);
       } else if (event.type === "phonetics") {
         handlers.onPhonetics?.({ ipa: event.ipa, audioUrl: event.audioUrl });
+      } else if (event.type === "saved") {
+        handlers.onSaved?.(event.id);
       } else if (event.type === "error") {
         throw new Error(event.message);
       }

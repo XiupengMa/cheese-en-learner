@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { Ref } from "react";
 import { parseDictionaryText } from "@/lib/dictionaryParse";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
-import type { LLMDebug, Phonetics } from "@/lib/types";
+import type { ChatMessage, LLMDebug, LookupRecord, Phonetics } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
@@ -24,15 +25,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 type Status = "idle" | "streaming" | "done";
 
+export interface DictionaryHandle {
+  /** Show a stored history entry — no LLM call, no fetch. */
+  restore: (record: LookupRecord) => void;
+}
+
 export function Dictionary({
   model,
   debug,
   initialQuery,
+  ref,
 }: {
   model: string;
   debug?: boolean;
   /** Deep-linked query (?mode=dict&query=…) — looked up automatically. */
   initialQuery?: string;
+  ref?: Ref<DictionaryHandle>;
 }) {
   const [term, setTerm] = useState("");
   const [lookedUp, setLookedUp] = useState("");
@@ -41,7 +49,10 @@ export function Dictionary({
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [lookupDebug, setLookupDebug] = useState<LLMDebug | null>(null);
+  const [lookupId, setLookupId] = useState<string | null>(null);
+  const [restoredThread, setRestoredThread] = useState<ChatMessage[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const entry = useMemo(() => parseDictionaryText(raw), [raw]);
 
@@ -64,11 +75,15 @@ export function Dictionary({
 
   async function runLookup(q: string) {
     if (!q || status === "streaming") return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     syncUrlQuery("dictionary", q);
     setLookedUp(q);
     setRaw("");
     setPhonetics(null);
     setLookupDebug(null);
+    setLookupId(null);
+    setRestoredThread(null);
     setError(null);
     setStatus("streaming");
     let received = false;
@@ -77,6 +92,7 @@ export function Dictionary({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ term: q, model }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => null);
@@ -89,13 +105,37 @@ export function Dictionary({
         },
         onDone: (dbg) => setLookupDebug(dbg),
         onPhonetics: (p) => setPhonetics(p),
+        onSaved: (id) => setLookupId(id),
       });
       setStatus("done");
     } catch (err) {
+      // Aborted means a history restore took over — its state stands.
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Lookup failed. Please try again.");
       setStatus(received ? "done" : "idle");
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    restore(record) {
+      abortRef.current?.abort();
+      setTerm(record.input);
+      setLookedUp(record.input);
+      setRaw(record.response.raw ?? "");
+      setPhonetics(record.response.phonetics ?? null);
+      setLookupDebug(null);
+      setLookupId(record.id);
+      setRestoredThread(
+        record.questions.flatMap((q) => [
+          { role: "user" as const, content: q.question },
+          { role: "assistant" as const, content: q.answer },
+        ])
+      );
+      setError(null);
+      setStatus("done");
+      syncUrlQuery("dictionary", record.input);
+    },
+  }), []);
 
   const showCard = lookedUp !== "" && status !== "idle";
   const ipa = phonetics?.ipa || entry.ipa;
@@ -202,11 +242,13 @@ export function Dictionary({
 
           {status === "done" && (
             <ChatThread
-              key={lookedUp}
+              key={lookupId ?? lookedUp}
               model={model}
               mode="dictionary"
               context={chatContext}
               debug={debug}
+              lookupId={lookupId}
+              initialMessages={restoredThread ?? undefined}
               placeholder={`Ask more about “${lookedUp}”…`}
             />
           )}

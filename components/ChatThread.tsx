@@ -18,6 +18,10 @@ interface ChatThreadProps {
   context: string;
   placeholder?: string;
   debug?: boolean;
+  /** History row this thread belongs to; sent so follow-ups are linked to it. */
+  lookupId?: string | null;
+  /** Restored thread from history. Change the component key to re-init. */
+  initialMessages?: ChatMessage[];
   ref?: Ref<ChatThreadHandle>;
 }
 
@@ -27,9 +31,11 @@ export function ChatThread({
   context,
   placeholder,
   debug,
+  lookupId,
+  initialMessages,
   ref,
 }: ChatThreadProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages ?? []);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +63,13 @@ export function ChatThread({
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model, mode, context, messages: history }),
+          body: JSON.stringify({
+            model,
+            mode,
+            context,
+            messages: history,
+            lookupId: lookupId ?? null,
+          }),
         });
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => null);
@@ -88,7 +100,7 @@ export function ChatThread({
         setBusy(false);
       }
     },
-    [model, mode, context]
+    [model, mode, context, lookupId]
   );
 
   useImperativeHandle(ref, () => ({ ask }), [ask]);

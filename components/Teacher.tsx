@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { Ref } from "react";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
-import type { LLMDebug } from "@/lib/types";
+import type { ChatMessage, LLMDebug, LookupRecord } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
@@ -15,15 +16,22 @@ interface Popover {
   y: number;
 }
 
+export interface TeacherHandle {
+  /** Show a stored history entry — no LLM call, no fetch. */
+  restore: (record: LookupRecord) => void;
+}
+
 export function Teacher({
   model,
   debug,
   initialQuery,
+  ref,
 }: {
   model: string;
   debug?: boolean;
   /** Deep-linked text (?mode=teacher&query=…) — translated automatically. */
   initialQuery?: string;
+  ref?: Ref<TeacherHandle>;
 }) {
   const [text, setText] = useState("");
   const [submittedText, setSubmittedText] = useState("");
@@ -31,6 +39,9 @@ export function Teacher({
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [translationDebug, setTranslationDebug] = useState<LLMDebug | null>(null);
+  const [lookupId, setLookupId] = useState<string | null>(null);
+  const [restoredThread, setRestoredThread] = useState<ChatMessage[] | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [popover, setPopover] = useState<Popover | null>(null);
   const [question, setQuestion] = useState("");
@@ -74,10 +85,14 @@ export function Teacher({
 
   async function runTranslate(source: string) {
     if (!source || translating) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     syncUrlQuery("teacher", source);
     setSubmittedText(source);
     setTranslation("");
     setTranslationDebug(null);
+    setLookupId(null);
+    setRestoredThread(null);
     setPopover(null);
     setError(null);
     setTranslating(true);
@@ -86,6 +101,7 @@ export function Teacher({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: source, model }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => null);
@@ -94,13 +110,36 @@ export function Teacher({
       await readEventStream(res.body, {
         onDelta: (chunk) => setTranslation((prev) => prev + chunk),
         onDone: (dbg) => setTranslationDebug(dbg),
+        onSaved: (id) => setLookupId(id),
       });
     } catch (err) {
+      // Aborted means a history restore took over — its state stands.
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Translation failed. Please try again.");
     } finally {
       setTranslating(false);
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    restore(record) {
+      abortRef.current?.abort();
+      setText(record.input);
+      setSubmittedText(record.input);
+      setTranslation(record.response.translation ?? "");
+      setTranslationDebug(null);
+      setLookupId(record.id);
+      setRestoredThread(
+        record.questions.flatMap((q) => [
+          { role: "user" as const, content: q.question },
+          { role: "assistant" as const, content: q.answer },
+        ])
+      );
+      setPopover(null);
+      setError(null);
+      syncUrlQuery("teacher", record.input);
+    },
+  }), []);
 
   const showPopoverFromSelection = useCallback(() => {
     // Don't reset or reposition while the user is typing in the popover
@@ -286,12 +325,14 @@ export function Teacher({
 
           <div ref={chatSectionRef}>
             <ChatThread
-              key={submittedText}
+              key={lookupId ?? submittedText}
               ref={chatRef}
               model={model}
               mode="teacher"
               context={chatContext}
               debug={debug}
+              lookupId={lookupId}
+              initialMessages={restoredThread ?? undefined}
               placeholder="Ask about grammar, vocabulary, tone…"
             />
           </div>

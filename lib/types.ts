@@ -46,4 +46,30 @@ export type StreamEvent =
   | { type: "delta"; text: string }
   | { type: "done"; debug: LLMDebug }
   | { type: "error"; message: string }
-  | ({ type: "phonetics" } & Phonetics);
+  | ({ type: "phonetics" } & Phonetics)
+  /** The completed response was saved to history under this id. */
+  | { type: "saved"; id: string };
+
+/** Stored LLM output in the `lookup` table — enough to re-open without an LLM call. */
+export interface LookupResponse {
+  /** Dictionary: the raw marker-format text parseDictionaryText understands. */
+  raw?: string;
+  /** Teacher: the Chinese translation. */
+  translation?: string;
+  phonetics?: Phonetics;
+}
+
+/** One row in the history list (input truncated server-side for preview). */
+export interface HistoryItem {
+  id: string;
+  mode: LearnMode;
+  input: string;
+  model: string;
+  createdAt: string;
+}
+
+/** A full history entry, as returned by GET /api/history/[id]. */
+export interface LookupRecord extends HistoryItem {
+  response: LookupResponse;
+  questions: { question: string; answer: string }[];
+}

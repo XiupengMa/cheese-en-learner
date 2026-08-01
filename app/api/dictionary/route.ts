@@ -1,9 +1,12 @@
+import { db } from "@/lib/db";
+import { lookup } from "@/lib/db/schema";
+import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { DICTIONARY_SYSTEM } from "@/lib/prompts";
 import { getSession, unauthorized } from "@/lib/session";
-import type { Phonetics } from "@/lib/types";
+import type { LookupResponse, Phonetics } from "@/lib/types";
 
 export const maxDuration = 60;
 
@@ -65,10 +68,12 @@ export async function POST(req: Request) {
     // (parallel) pronunciation lookup resolves. Each enqueue is a complete
     // NDJSON line, so interleaving is safe.
     const encoder = new TextEncoder();
+    let phonetics: Phonetics | null = null;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const pronunciation = fetchPronunciation(term)
           .then((p) => {
+            phonetics = p;
             controller.enqueue(
               encoder.encode(JSON.stringify({ type: "phonetics", ...p }) + "\n")
             );
@@ -89,7 +94,26 @@ export async function POST(req: Request) {
       },
     });
 
-    return new Response(stream, {
+    // The save runs at flush — after `await pronunciation` above — so the
+    // captured phonetics are final by the time the row is written.
+    const logged = withHistorySave(stream, async (text) => {
+      const id = crypto.randomUUID();
+      const response: LookupResponse = {
+        raw: text,
+        ...(phonetics ? { phonetics } : {}),
+      };
+      await db.insert(lookup).values({
+        id,
+        userId: session.user.id,
+        mode: "dictionary",
+        input: term,
+        response,
+        model,
+      });
+      return id;
+    });
+
+    return new Response(logged, {
       headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
     });
   } catch (err) {

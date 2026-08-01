@@ -1,3 +1,7 @@
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { lookup, question } from "@/lib/db/schema";
+import { withHistorySave } from "@/lib/historyLog";
 import { MAX_CONTEXT_LENGTH, MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { DEFAULT_MODEL } from "@/lib/models";
@@ -34,13 +38,43 @@ export async function POST(req: Request) {
       );
     }
 
+    const claimedLookupId =
+      typeof body.lookupId === "string" && body.lookupId ? body.lookupId : null;
+
     const stream = await streamLLM({
       model,
       system: chatSystem(mode, context),
       messages,
       effort: "low",
     });
-    return new Response(stream, {
+
+    const logged = withHistorySave(stream, async (answer) => {
+      // Attach to the lookup only if it actually belongs to this user —
+      // the id arrives from the client and could be anything.
+      let lookupId: string | null = null;
+      if (claimedLookupId) {
+        const [owned] = await db
+          .select({ id: lookup.id })
+          .from(lookup)
+          .where(
+            and(eq(lookup.id, claimedLookupId), eq(lookup.userId, session.user.id))
+          )
+          .limit(1);
+        lookupId = owned?.id ?? null;
+      }
+      await db.insert(question).values({
+        id: crypto.randomUUID(),
+        userId: session.user.id,
+        lookupId,
+        mode,
+        question: messages[messages.length - 1].content,
+        answer,
+        model,
+      });
+      // No saved event for questions — nothing on the client references them.
+    });
+
+    return new Response(logged, {
       headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
     });
   } catch (err) {

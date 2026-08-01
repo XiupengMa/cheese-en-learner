@@ -1,4 +1,13 @@
-import { bigint, boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 // Better Auth core tables (spec from getAuthTables() for better-auth 1.6).
 // Property names must match Better Auth's field names; column names are
@@ -63,6 +72,47 @@ export const verification = pgTable("verification", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Query history: one row per Dictionary lookup / Teacher translation.
+// `response` holds the full LLM output (raw marker text or translation, plus
+// phonetics) so reopening from history never re-spends an LLM call.
+export const lookup = pgTable(
+  "lookup",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mode: text("mode").notNull(), // "dictionary" | "teacher"
+    input: text("input").notNull(),
+    response: jsonb("response").notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("lookup_user_created_idx").on(t.userId, t.createdAt)]
+);
+
+// Follow-up and selection questions. lookupId is null when the parent lookup
+// was deleted from history or its save failed; mode keeps them classifiable
+// for the later suggested-prompts phase.
+export const question = pgTable(
+  "question",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    lookupId: text("lookup_id").references(() => lookup.id, {
+      onDelete: "set null",
+    }),
+    mode: text("mode").notNull(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("question_lookup_idx").on(t.lookupId)]
+);
 
 // WebAuthn credentials for the @better-auth/passkey plugin (spec from the
 // plugin's schema definition).
