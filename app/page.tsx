@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dictionary, type DictionaryHandle } from "@/components/Dictionary";
 import { History } from "@/components/History";
@@ -96,15 +97,6 @@ export default function Home() {
     router.replace("/login");
   }
 
-  async function addPasskey() {
-    const result = await authClient.passkey.addPasskey();
-    if (result?.error) {
-      window.alert(result.error.message ?? "Could not add a passkey on this device.");
-    } else {
-      window.alert("Passkey added — you can now use it on the sign-in page.");
-    }
-  }
-
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
@@ -130,19 +122,16 @@ export default function Home() {
             </label>
             {session && (
               <div className="flex items-center gap-2 text-sm">
-                <span
-                  className="hidden max-w-24 truncate text-neutral-500 sm:inline"
-                  title={session.user.email}
+                <Link
+                  href="/account"
+                  title="Account settings — password and passkeys"
+                  className="flex max-w-32 items-center gap-1.5 text-neutral-500 underline-offset-2 hover:text-neutral-800 hover:underline dark:hover:text-neutral-200"
                 >
-                  {session.user.name}
-                </span>
-                <button
-                  onClick={addPasskey}
-                  title="Add a passkey (Face ID, Touch ID, or a security key) for signing in on this device"
-                  className="text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-200"
-                >
-                  🔑
-                </button>
+                  <span aria-hidden>⚙️</span>
+                  <span className="hidden truncate sm:inline">
+                    {session.user.name}
+                  </span>
+                </Link>
                 <button
                   onClick={signOut}
                   className="text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-200"
