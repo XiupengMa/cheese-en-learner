@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
+import { syncUrlQuery } from "@/lib/urlQuery";
 import type { LLMDebug } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";
@@ -14,7 +15,16 @@ interface Popover {
   y: number;
 }
 
-export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
+export function Teacher({
+  model,
+  debug,
+  initialQuery,
+}: {
+  model: string;
+  debug?: boolean;
+  /** Deep-linked text (?mode=teacher&query=…) — translated automatically. */
+  initialQuery?: string;
+}) {
   const [text, setText] = useState("");
   const [submittedText, setSubmittedText] = useState("");
   const [translation, setTranslation] = useState("");
@@ -27,25 +37,44 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
 
   const selectionAreaRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const questionInputRef = useRef<HTMLInputElement>(null);
   const chatRef = useRef<ChatThreadHandle>(null);
   const chatSectionRef = useRef<HTMLDivElement>(null);
 
-  // Close the popover when clicking anywhere outside of it.
+  // Close the popover when tapping/clicking anywhere outside of it.
   useEffect(() => {
     if (!popover) return;
-    function onMouseDown(e: MouseEvent) {
+    function onPointerDown(e: PointerEvent) {
       if (!popoverRef.current?.contains(e.target as Node)) {
         setPopover(null);
       }
     }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [popover]);
 
-  async function translate(e: React.FormEvent) {
-    e.preventDefault();
-    const source = text.trim();
+  // Focus the popover's question input only where a real keyboard is likely —
+  // on touch devices the on-screen keyboard would cover the popover itself.
+  useEffect(() => {
+    if (popover && window.matchMedia("(pointer: fine)").matches) {
+      questionInputRef.current?.focus();
+    }
+  }, [popover]);
+
+  const ranInitialQuery = useRef(false);
+  useEffect(() => {
+    if (!initialQuery || ranInitialQuery.current) return;
+    ranInitialQuery.current = true;
+    const source = initialQuery.slice(0, MAX_TEXT_LENGTH);
+    setText(source);
+    void runTranslate(source);
+    // runTranslate only needs the model of the render that set initialQuery
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
+  async function runTranslate(source: string) {
     if (!source || translating) return;
+    syncUrlQuery("teacher", source);
     setSubmittedText(source);
     setTranslation("");
     setTranslationDebug(null);
@@ -73,23 +102,48 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
     }
   }
 
-  function onTextMouseUp() {
-    // Let the browser finish updating the selection first.
-    setTimeout(() => {
-      const sel = window.getSelection();
-      const selText = sel?.toString().trim();
-      if (!sel || sel.isCollapsed || !selText) return;
-      if (!selectionAreaRef.current?.contains(sel.anchorNode)) return;
+  const showPopoverFromSelection = useCallback(() => {
+    // Don't reset or reposition while the user is typing in the popover
+    // (on iOS, focusing its input collapses the text selection).
+    if (popoverRef.current?.contains(document.activeElement)) return;
 
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      const areaRect = selectionAreaRef.current.getBoundingClientRect();
-      const rawX = rect.left - areaRect.left + rect.width / 2;
-      const x = Math.min(Math.max(rawX, 130), areaRect.width - 130);
-      const y = rect.bottom - areaRect.top;
-      setQuestion("");
-      setPopover({ text: selText, x, y });
-    }, 0);
+    const sel = window.getSelection();
+    const selText = sel?.toString().trim();
+    if (!sel || sel.isCollapsed || !selText) return;
+    if (!selectionAreaRef.current?.contains(sel.anchorNode)) return;
+
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    const areaRect = selectionAreaRef.current.getBoundingClientRect();
+    const rawX = rect.left - areaRect.left + rect.width / 2;
+    // Keep the popover (half-width 130px) inside the card, even when the
+    // card itself is narrower than the popover on small screens.
+    const half = Math.min(130, areaRect.width / 2);
+    const x = Math.min(Math.max(rawX, half), areaRect.width - half);
+    const y = rect.bottom - areaRect.top;
+    setQuestion("");
+    setPopover({ text: selText, x, y });
+  }, []);
+
+  function onTextPointerUp() {
+    // Let the browser finish updating the selection first.
+    setTimeout(showPopoverFromSelection, 0);
   }
+
+  // Touch selection happens via long-press and drag handles, which don't
+  // reliably fire pointerup — watch selectionchange (debounced) instead.
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    let timer: number;
+    const onSelectionChange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(showPopoverFromSelection, 300);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
+  }, [showPopoverFromSelection]);
 
   function askAboutSelection(q: string) {
     chatRef.current?.ask(q);
@@ -107,7 +161,12 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
 
   return (
     <div>
-      <form onSubmit={translate}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void runTranslate(text.trim());
+        }}
+      >
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -138,7 +197,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
           {/* Original text — selectable, with the ask-about-selection popover */}
           <div
             ref={selectionAreaRef}
-            className="relative mt-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
+            className="relative mt-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:mt-6 sm:p-6 dark:border-neutral-800 dark:bg-neutral-900"
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1">
@@ -152,7 +211,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
               </span>
             </div>
             <p
-              onMouseUp={onTextMouseUp}
+              onPointerUp={onTextPointerUp}
               className="cursor-text select-text whitespace-pre-wrap leading-relaxed selection:bg-amber-200 dark:selection:bg-amber-700/60"
             >
               {submittedText}
@@ -189,11 +248,11 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
                   className="flex gap-1.5"
                 >
                   <input
+                    ref={questionInputRef}
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="Or ask a question…"
-                    autoFocus
-                    className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-amber-400 dark:border-neutral-600 dark:bg-neutral-900"
+                    className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-base outline-none focus:border-amber-400 sm:text-xs dark:border-neutral-600 dark:bg-neutral-900"
                   />
                   <button
                     type="submit"
@@ -208,7 +267,7 @@ export function Teacher({ model, debug }: { model: string; debug?: boolean }) {
           </div>
 
           {/* Translation */}
-          <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6 dark:border-neutral-800 dark:bg-neutral-900">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
               Translation
             </h3>

@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dictionary } from "@/components/Dictionary";
 import { ModelSelect } from "@/components/ModelSelect";
 import { Teacher } from "@/components/Teacher";
 import { authClient } from "@/lib/auth-client";
 import { DEFAULT_MODEL } from "@/lib/models";
+import { readUrlQuery } from "@/lib/urlQuery";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import type { LearnMode } from "@/lib/types";
 
@@ -22,20 +24,48 @@ export default function Home() {
   const [debugStr, setDebugStr] = useLocalStorage("cheese.debug", "0");
   const debug = debugStr === "1";
 
+  const [urlQuery, setUrlQuery] = useState<{
+    mode: LearnMode;
+    query: string;
+  } | null>(null);
+
+  // Deep links: /?mode=dict&query=hello opens that tab and runs the query.
+  // Registered after the useLocalStorage effects above so the stored model is
+  // already loaded in the render that hands the query to the panel below.
+  useEffect(() => {
+    const { mode, query } = readUrlQuery();
+    if (mode) setTab(mode);
+    // One-shot init from the URL; the extra render is the point — the query
+    // must reach the panel only after the stored model has loaded above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (query) setUrlQuery({ mode: mode ?? "dictionary", query });
+  }, [setTab]);
+
   async function signOut() {
     await authClient.signOut();
     router.replace("/login");
   }
 
+  async function addPasskey() {
+    const result = await authClient.passkey.addPasskey();
+    if (result?.error) {
+      window.alert(result.error.message ?? "Could not add a passkey on this device.");
+    } else {
+      window.alert("Passkey added — you can now use it on the sign-in page.");
+    }
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50 dark:bg-neutral-950">
+    <div className="flex min-h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex min-h-14 w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:py-0">
           <h1 className="text-base font-bold tracking-tight">
             🧀 Cheese{" "}
-            <span className="font-normal text-neutral-400">English Learner</span>
+            <span className="hidden font-normal text-neutral-400 min-[440px]:inline">
+              English Learner
+            </span>
           </h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <label
               className="flex cursor-pointer items-center gap-1.5 text-sm text-neutral-500"
               title="Show the raw requests and responses exchanged with the LLM"
@@ -52,11 +82,18 @@ export default function Home() {
             {session && (
               <div className="flex items-center gap-2 text-sm">
                 <span
-                  className="max-w-24 truncate text-neutral-500"
+                  className="hidden max-w-24 truncate text-neutral-500 sm:inline"
                   title={session.user.email}
                 >
                   {session.user.name}
                 </span>
+                <button
+                  onClick={addPasskey}
+                  title="Add a passkey (Face ID, Touch ID, or a security key) for signing in on this device"
+                  className="text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-200"
+                >
+                  🔑
+                </button>
                 <button
                   onClick={signOut}
                   className="text-neutral-400 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-200"
@@ -69,8 +106,8 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-        <nav className="mb-6 flex gap-1 rounded-xl bg-neutral-200/60 p-1 dark:bg-neutral-900">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 sm:py-6">
+        <nav className="mb-4 flex gap-1 rounded-xl bg-neutral-200/60 p-1 sm:mb-6 dark:bg-neutral-900">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -88,14 +125,22 @@ export default function Home() {
 
         {/* Both panels stay mounted so switching tabs never loses your work */}
         <div className={tab === "dictionary" ? "" : "hidden"}>
-          <Dictionary model={model} debug={debug} />
+          <Dictionary
+            model={model}
+            debug={debug}
+            initialQuery={urlQuery?.mode === "dictionary" ? urlQuery.query : undefined}
+          />
         </div>
         <div className={tab === "teacher" ? "" : "hidden"}>
-          <Teacher model={model} debug={debug} />
+          <Teacher
+            model={model}
+            debug={debug}
+            initialQuery={urlQuery?.mode === "teacher" ? urlQuery.query : undefined}
+          />
         </div>
       </main>
 
-      <footer className="pb-6 text-center text-xs text-neutral-400">
+      <footer className="px-4 pb-6 text-center text-xs text-neutral-400">
         Answers are AI-generated — double-check anything important.
       </footer>
     </div>

@@ -34,6 +34,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,10 @@ export default function LoginPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("The passwords don't match. Please retype them.");
+      return;
+    }
     setPending(true);
     setError(null);
 
@@ -66,8 +71,25 @@ export default function LoginPage() {
     router.refresh();
   }
 
+  async function signInWithPasskey() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    const result = await authClient.signIn.passkey();
+    if (result?.error) {
+      setError(
+        result.error.message ??
+          "Passkey sign-in didn't work. Try your email and password."
+      );
+      setPending(false);
+      return;
+    }
+    router.replace("/");
+    router.refresh();
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-50 px-4 dark:bg-neutral-950">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-neutral-50 px-4 py-8 dark:bg-neutral-950">
       <main className="w-full max-w-sm">
         <h1 className="mb-6 text-center text-2xl font-bold tracking-tight">
           🧀 Cheese{" "}
@@ -126,14 +148,26 @@ export default function LoginPage() {
               required
             />
             {mode === "signup" && (
-              <Field
-                label="Invite code"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                placeholder="Ask the person who runs this app"
-                autoComplete="off"
-                required
-              />
+              <>
+                <Field
+                  label="Confirm password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Type the password again"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                <Field
+                  label="Invite code"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  placeholder="Ask the person who runs this app"
+                  autoComplete="off"
+                  required
+                />
+              </>
             )}
 
             {error && (
@@ -156,6 +190,24 @@ export default function LoginPage() {
                   : "Create account"}
             </button>
           </form>
+
+          {mode === "signin" && (
+            <>
+              <div className="my-4 flex items-center gap-3 text-xs text-neutral-400">
+                <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
+                or
+                <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
+              </div>
+              <button
+                type="button"
+                onClick={signInWithPasskey}
+                disabled={pending}
+                className="w-full rounded-xl border border-neutral-200 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 shadow-sm transition-colors hover:border-amber-400 disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+              >
+                🔑 Sign in with a passkey
+              </button>
+            </>
+          )}
         </div>
 
         <p className="mt-4 text-center text-xs text-neutral-400">

@@ -32,4 +32,17 @@ body {
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+
+  /* Mobile: no gray tap flash, and no double-tap-to-zoom on controls
+     (rapid taps on the audio buttons would otherwise zoom the page) */
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
 }

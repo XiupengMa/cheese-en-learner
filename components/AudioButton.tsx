@@ -156,7 +156,7 @@ export function AudioButton({ src, text, title, className }: AudioButtonProps) {
       onClick={play}
       title={title ?? "Play pronunciation"}
       aria-label={title ?? `Play pronunciation of ${text}`}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full p-1.5 transition-colors ${
+      className={`inline-flex shrink-0 items-center justify-center rounded-full p-1.5 transition-colors pointer-coarse:-m-1 pointer-coarse:p-2.5 ${
         playing
           ? "text-amber-500 animate-pulse"
           : "text-neutral-400 hover:text-amber-500"

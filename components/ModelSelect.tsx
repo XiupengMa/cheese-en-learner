@@ -18,7 +18,7 @@ export function ModelSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-800 shadow-sm outline-none focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+        className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-base text-neutral-800 shadow-sm outline-none focus:border-amber-400 sm:text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
       >
         <optgroup label="Claude">
           {anthropicModels.map((m) => (

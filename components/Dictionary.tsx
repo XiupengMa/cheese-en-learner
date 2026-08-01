@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDictionaryText } from "@/lib/dictionaryParse";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
+import { syncUrlQuery } from "@/lib/urlQuery";
 import type { LLMDebug, Phonetics } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread } from "./ChatThread";
@@ -23,7 +24,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 type Status = "idle" | "streaming" | "done";
 
-export function Dictionary({ model, debug }: { model: string; debug?: boolean }) {
+export function Dictionary({
+  model,
+  debug,
+  initialQuery,
+}: {
+  model: string;
+  debug?: boolean;
+  /** Deep-linked query (?mode=dict&query=…) — looked up automatically. */
+  initialQuery?: string;
+}) {
   const [term, setTerm] = useState("");
   const [lookedUp, setLookedUp] = useState("");
   const [raw, setRaw] = useState("");
@@ -31,13 +41,30 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [lookupDebug, setLookupDebug] = useState<LLMDebug | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const entry = useMemo(() => parseDictionaryText(raw), [raw]);
 
-  async function lookup(e: React.FormEvent) {
-    e.preventDefault();
-    const q = term.trim();
+  // Focus the input on load only where a real keyboard is likely — on touch
+  // devices autofocus pops the on-screen keyboard over the page.
+  useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus();
+  }, []);
+
+  const ranInitialQuery = useRef(false);
+  useEffect(() => {
+    if (!initialQuery || ranInitialQuery.current) return;
+    ranInitialQuery.current = true;
+    const q = initialQuery.slice(0, MAX_TERM_LENGTH);
+    setTerm(q);
+    void runLookup(q);
+    // runLookup only needs to see the model of the render that set initialQuery
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
+  async function runLookup(q: string) {
     if (!q || status === "streaming") return;
+    syncUrlQuery("dictionary", q);
     setLookedUp(q);
     setRaw("");
     setPhonetics(null);
@@ -76,13 +103,19 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
 
   return (
     <div>
-      <form onSubmit={lookup} className="flex gap-2">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void runLookup(term.trim());
+        }}
+        className="flex gap-2"
+      >
         <input
+          ref={inputRef}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           placeholder="Type or paste a word or phrase…"
           maxLength={MAX_TERM_LENGTH}
-          autoFocus
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
         />
         <button
@@ -102,9 +135,11 @@ export function Dictionary({ model, debug }: { model: string; debug?: boolean })
 
       {showCard && (
         <>
-          <article className="mt-6 space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <article className="mt-4 space-y-5 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:mt-6 sm:p-6 dark:border-neutral-800 dark:bg-neutral-900">
             <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 className="text-2xl font-bold">{lookedUp}</h2>
+              <h2 className="min-w-0 break-words text-xl font-bold sm:text-2xl">
+                {lookedUp}
+              </h2>
               {ipa && <span className="font-mono text-sm text-neutral-500">{ipa}</span>}
               <AudioButton
                 src={phonetics?.audioUrl}
