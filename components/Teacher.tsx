@@ -9,6 +9,7 @@ import type { ChatMessage, LLMDebug, LookupRecord } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
+import { ModelSelect } from "./ModelSelect";
 
 interface Popover {
   text: string;
@@ -23,11 +24,14 @@ export interface TeacherHandle {
 
 export function Teacher({
   model,
+  onModelChange,
   debug,
   initialQuery,
   ref,
 }: {
   model: string;
+  /** Persist a new model choice for this mode (account-level preference). */
+  onModelChange?: (id: string) => void;
   debug?: boolean;
   /** Deep-linked text (?mode=teacher&query=…) — translated automatically. */
   initialQuery?: string;
@@ -214,7 +218,12 @@ export function Teacher({
           placeholder="Paste an English sentence or paragraphs to study…"
           className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base leading-relaxed shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
         />
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-between gap-3">
+          {onModelChange ? (
+            <ModelSelect value={model} onChange={onModelChange} />
+          ) : (
+            <span />
+          )}
           <button
             type="submit"
             disabled={translating || !text.trim()}

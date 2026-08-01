@@ -11,6 +11,7 @@ import { AudioButton } from "./AudioButton";
 import { ChatThread } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
 import { Markdown } from "./Markdown";
+import { ModelSelect } from "./ModelSelect";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -32,11 +33,14 @@ export interface DictionaryHandle {
 
 export function Dictionary({
   model,
+  onModelChange,
   debug,
   initialQuery,
   ref,
 }: {
   model: string;
+  /** Persist a new model choice for this mode (account-level preference). */
+  onModelChange?: (id: string) => void;
   debug?: boolean;
   /** Deep-linked query (?mode=dict&query=…) — looked up automatically. */
   initialQuery?: string;
@@ -166,6 +170,12 @@ export function Dictionary({
           {status === "streaming" ? "Looking up…" : "Look up"}
         </button>
       </form>
+
+      {onModelChange && (
+        <div className="mt-2 flex justify-end">
+          <ModelSelect value={model} onChange={onModelChange} />
+        </div>
+      )}
 
       {error && (
         <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400">

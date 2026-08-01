@@ -5,6 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
+import { isKnownModel } from "./models";
 
 // Constant-time comparison; hashing first makes unequal lengths safe.
 function safeEqual(a: string, b: string): boolean {
@@ -12,6 +13,19 @@ function safeEqual(a: string, b: string): boolean {
   const hb = createHash("sha256").update(b).digest();
   return timingSafeEqual(ha, hb);
 }
+
+// Standard Schema (spec v1) validator for updateUser input — rejects model
+// ids that aren't in lib/models.ts. Hand-rolled to avoid pulling in zod.
+const modelIdSchema = {
+  "~standard": {
+    version: 1 as const,
+    vendor: "cheese-en-learner",
+    validate: (value: unknown) =>
+      value === null || isKnownModel(value)
+        ? { value }
+        : { issues: [{ message: "Unknown model id." }] },
+  },
+};
 
 export const auth = betterAuth({
   appName: "Cheese English Learner",
@@ -27,6 +41,22 @@ export const auth = betterAuth({
     "https://cheeseapps.com",
   ],
   database: drizzleAdapter(db, { provider: "pg" }),
+  user: {
+    // Per-account LLM preferences, one per learn mode. Null = app default.
+    // Readable from session.user; writable via authClient.updateUser().
+    additionalFields: {
+      dictionaryModel: {
+        type: "string",
+        required: false,
+        validator: { input: modelIdSchema },
+      },
+      teacherModel: {
+        type: "string",
+        required: false,
+        validator: { input: modelIdSchema },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },

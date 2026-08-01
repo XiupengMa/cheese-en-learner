@@ -3,7 +3,7 @@ import { lookup } from "@/lib/db/schema";
 import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
-import { DEFAULT_MODEL } from "@/lib/models";
+import { resolveModel } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
 import { getSession, unauthorized } from "@/lib/session";
 import type { LookupResponse } from "@/lib/types";
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const text = String(body.text ?? "").trim();
-    const model = String(body.model || DEFAULT_MODEL);
+    const model = resolveModel(body.model);
     if (!text) {
       return Response.json({ error: "Please enter some text to translate." }, { status: 400 });
     }

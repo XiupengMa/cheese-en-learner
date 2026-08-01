@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dictionary, type DictionaryHandle } from "@/components/Dictionary";
 import { History } from "@/components/History";
-import { ModelSelect } from "@/components/ModelSelect";
 import { Teacher, type TeacherHandle } from "@/components/Teacher";
 import { authClient } from "@/lib/auth-client";
-import { DEFAULT_MODEL } from "@/lib/models";
+import { isKnownModel, resolveModel } from "@/lib/models";
 import { readUrlQuery } from "@/lib/urlQuery";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import type { LearnMode, LookupRecord } from "@/lib/types";
@@ -22,11 +21,48 @@ const TABS: { id: TabId; label: string }[] = [
 
 export default function Home() {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
-  const [model, setModel] = useLocalStorage("cheese.model", DEFAULT_MODEL);
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const [tab, setTab] = useLocalStorage("cheese.tab", "dictionary");
   const [debugStr, setDebugStr] = useLocalStorage("cheese.debug", "0");
   const debug = debugStr === "1";
+
+  // Model preferences live on the account (user.dictionaryModel/teacherModel,
+  // one per learn mode). Local state is an optimistic overlay so the select
+  // responds instantly while updateUser persists in the background.
+  const [modelOverride, setModelOverride] = useState<
+    Partial<Record<LearnMode, string>>
+  >({});
+  const dictionaryModel =
+    modelOverride.dictionary ?? resolveModel(session?.user.dictionaryModel);
+  const teacherModel =
+    modelOverride.teacher ?? resolveModel(session?.user.teacherModel);
+
+  function setModelFor(mode: LearnMode, id: string) {
+    setModelOverride((prev) => ({ ...prev, [mode]: id }));
+    const patch =
+      mode === "dictionary" ? { dictionaryModel: id } : { teacherModel: id };
+    void authClient.updateUser(patch).then((res) => {
+      if (res.error) {
+        console.error("Saving model preference failed:", res.error.message);
+      }
+    });
+  }
+
+  // One-time adoption of the pre-account preference: earlier versions kept a
+  // single model in localStorage ("cheese.model"). Seed both modes from it.
+  const migratedModelRef = useRef(false);
+  useEffect(() => {
+    if (!session?.user || migratedModelRef.current) return;
+    migratedModelRef.current = true;
+    const stored = window.localStorage.getItem("cheese.model");
+    if (!stored) return;
+    window.localStorage.removeItem("cheese.model");
+    if (session.user.dictionaryModel || session.user.teacherModel) return;
+    if (!isKnownModel(stored)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setModelOverride({ dictionary: stored, teacher: stored });
+    void authClient.updateUser({ dictionaryModel: stored, teacherModel: stored });
+  }, [session]);
 
   const [urlQuery, setUrlQuery] = useState<{
     mode: LearnMode;
@@ -44,8 +80,8 @@ export default function Home() {
   }
 
   // Deep links: /?mode=dict&query=hello opens that tab and runs the query.
-  // Registered after the useLocalStorage effects above so the stored model is
-  // already loaded in the render that hands the query to the panel below.
+  // The query is handed to the panel only once the session has loaded (see
+  // initialQuery below), so the auto-run uses the account's model.
   useEffect(() => {
     const { mode, query } = readUrlQuery();
     if (mode) setTab(mode);
@@ -92,7 +128,6 @@ export default function Home() {
               />
               Debug
             </label>
-            <ModelSelect value={model} onChange={setModel} />
             {session && (
               <div className="flex items-center gap-2 text-sm">
                 <span
@@ -141,17 +176,27 @@ export default function Home() {
         <div className={tab === "dictionary" ? "" : "hidden"}>
           <Dictionary
             ref={dictionaryRef}
-            model={model}
+            model={dictionaryModel}
+            onModelChange={(id) => setModelFor("dictionary", id)}
             debug={debug}
-            initialQuery={urlQuery?.mode === "dictionary" ? urlQuery.query : undefined}
+            initialQuery={
+              !sessionPending && urlQuery?.mode === "dictionary"
+                ? urlQuery.query
+                : undefined
+            }
           />
         </div>
         <div className={tab === "teacher" ? "" : "hidden"}>
           <Teacher
             ref={teacherRef}
-            model={model}
+            model={teacherModel}
+            onModelChange={(id) => setModelFor("teacher", id)}
             debug={debug}
-            initialQuery={urlQuery?.mode === "teacher" ? urlQuery.query : undefined}
+            initialQuery={
+              !sessionPending && urlQuery?.mode === "teacher"
+                ? urlQuery.query
+                : undefined
+            }
           />
         </div>
         <div className={tab === "history" ? "" : "hidden"}>

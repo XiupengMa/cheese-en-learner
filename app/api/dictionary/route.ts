@@ -3,7 +3,7 @@ import { lookup } from "@/lib/db/schema";
 import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
-import { DEFAULT_MODEL } from "@/lib/models";
+import { resolveModel } from "@/lib/models";
 import { DICTIONARY_SYSTEM } from "@/lib/prompts";
 import { getSession, unauthorized } from "@/lib/session";
 import type { LookupResponse, Phonetics } from "@/lib/types";
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const term = String(body.term ?? "").trim();
-    const model = String(body.model || DEFAULT_MODEL);
+    const model = resolveModel(body.model);
     if (!term) {
       return Response.json({ error: "Please enter a word or phrase." }, { status: 400 });
     }

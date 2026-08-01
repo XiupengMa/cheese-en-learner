@@ -21,6 +21,10 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  // Per-account model preferences (additionalFields in lib/auth.ts).
+  // Null = app default; validated against lib/models.ts on write.
+  dictionaryModel: text("dictionary_model"),
+  teacherModel: text("teacher_model"),
 });
 
 export const session = pgTable("session", {

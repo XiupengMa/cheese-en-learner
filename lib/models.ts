@@ -39,3 +39,13 @@ export function getModel(id: string): ModelOption {
   }
   return model;
 }
+
+export function isKnownModel(id: unknown): id is string {
+  return typeof id === "string" && MODELS.some((m) => m.id === id);
+}
+
+/** A usable model id from untrusted input: the id if known, else the default.
+ *  Also covers stored preferences whose model has since been retired. */
+export function resolveModel(id: unknown): string {
+  return isKnownModel(id) ? id : DEFAULT_MODEL;
+}
