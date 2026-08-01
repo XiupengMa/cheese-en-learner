@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
+import { submitOnModEnter } from "@/lib/keySubmit";
 import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import type { ChatMessage, LearnMode, LLMDebug } from "@/lib/types";
@@ -175,6 +176,7 @@ export function ChatThread({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={submitOnModEnter}
           placeholder={placeholder ?? "Ask anything about it…"}
           maxLength={MAX_MESSAGE_LENGTH}
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3.5 py-2 text-base outline-none placeholder:text-neutral-400 focus:border-amber-400 sm:text-sm dark:border-neutral-700 dark:bg-neutral-950"

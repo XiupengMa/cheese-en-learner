@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Field } from "@/components/Field";
 import { authClient } from "@/lib/auth-client";
+import { submitOnModEnter } from "@/lib/keySubmit";
 
 function Card({
   title,
@@ -221,6 +222,7 @@ function PasskeysCard() {
                     <input
                       value={draftName}
                       onChange={(e) => setDraftName(e.target.value)}
+                      onKeyDown={submitOnModEnter}
                       maxLength={100}
                       autoFocus
                       className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-base outline-none focus:border-amber-400 sm:text-sm dark:border-neutral-600 dark:bg-neutral-950"
@@ -283,6 +285,7 @@ function PasskeysCard() {
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={submitOnModEnter}
           placeholder="Name (optional), e.g. MacBook Touch ID"
           maxLength={100}
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-base outline-none placeholder:text-neutral-400 focus:border-amber-400 sm:text-sm dark:border-neutral-700 dark:bg-neutral-950"

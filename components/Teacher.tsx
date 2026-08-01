@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
+import { submitOnModEnter } from "@/lib/keySubmit";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
@@ -361,6 +362,7 @@ export function Teacher({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={submitOnModEnter}
           rows={5}
           maxLength={MAX_TEXT_LENGTH}
           placeholder="Paste an English sentence or paragraphs to study…"
@@ -457,6 +459,7 @@ export function Teacher({
                     ref={questionInputRef}
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={submitOnModEnter}
                     placeholder="Or ask a question…"
                     className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-base outline-none focus:border-amber-400 sm:text-xs dark:border-neutral-600 dark:bg-neutral-900"
                   />

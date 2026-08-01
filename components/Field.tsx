@@ -1,5 +1,7 @@
 "use client";
 
+import { submitOnModEnter } from "@/lib/keySubmit";
+
 /** Labeled text input used by the auth and account forms. */
 export function Field({
   label,
@@ -11,6 +13,7 @@ export function Field({
         {label}
       </span>
       <input
+        onKeyDown={submitOnModEnter}
         {...props}
         className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
       />

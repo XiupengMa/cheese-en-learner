@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react
 import type { Ref } from "react";
 import { parseDictionaryText } from "@/lib/dictionaryParse";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
+import { submitOnModEnter } from "@/lib/keySubmit";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
 import type { ChatMessage, LLMDebug, LookupRecord, Phonetics } from "@/lib/types";
@@ -158,6 +159,7 @@ export function Dictionary({
           ref={inputRef}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
+          onKeyDown={submitOnModEnter}
           placeholder="Type or paste a word or phrase…"
           maxLength={MAX_TERM_LENGTH}
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
