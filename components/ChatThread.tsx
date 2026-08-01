@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useImperativeHandle, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { readEventStream } from "@/lib/streamClient";
@@ -41,13 +41,31 @@ export function ChatThread({
   const [error, setError] = useState<string | null>(null);
   const [debugLogs, setDebugLogs] = useState<LLMDebug[]>([]);
   const busyRef = useRef(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
+  // Follow the stream only while the user is at the bottom of the box —
+  // scrolling up means they're reading, so stop yanking the view down.
+  const followRef = useRef(true);
+
+  function onScroll() {
+    const el = scrollBoxRef.current;
+    if (!el) return;
+    followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }
+
+  // Pin the box to the bottom as messages stream in (after the DOM commit,
+  // so the new content's height is included). Only the box scrolls — never
+  // the page.
+  useEffect(() => {
+    const el = scrollBoxRef.current;
+    if (el && followRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const ask = useCallback(
     async (question: string) => {
       const q = question.trim();
       if (!q || busyRef.current) return;
       busyRef.current = true;
+      followRef.current = true; // a new prompt re-arms auto-scroll
       setBusy(true);
       setError(null);
 
@@ -83,7 +101,6 @@ export function ChatThread({
               next[next.length - 1] = { ...last, content: last.content + chunk };
               return next;
             });
-            bottomRef.current?.scrollIntoView({ block: "nearest" });
           },
           onDone: (dbg) => setDebugLogs((prev) => [...prev, dbg]),
         });
@@ -119,7 +136,11 @@ export function ChatThread({
       </p>
 
       {messages.length > 0 && (
-        <div className="mb-3 flex max-h-[28rem] flex-col gap-3 overflow-y-auto pr-1">
+        <div
+          ref={scrollBoxRef}
+          onScroll={onScroll}
+          className="mb-3 flex max-h-[28rem] flex-col gap-3 overflow-y-auto pr-1"
+        >
           {messages.map((msg, i) =>
             msg.role === "user" ? (
               <div
@@ -141,7 +162,6 @@ export function ChatThread({
               </div>
             )
           )}
-          <div ref={bottomRef} />
         </div>
       )}
 
