@@ -9,7 +9,7 @@ import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
 import type { ChatMessage, LLMDebug, LookupRecord, Phonetics } from "@/lib/types";
 import { AudioButton } from "./AudioButton";
-import { ChatThread } from "./ChatThread";
+import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
 import { Markdown } from "./Markdown";
 import { ModelSelect } from "./ModelSelect";
@@ -30,6 +30,12 @@ type Status = "idle" | "streaming" | "done";
 export interface DictionaryHandle {
   /** Show a stored history entry — no LLM call, no fetch. */
   restore: (record: LookupRecord) => void;
+  /** Run a fresh lookup (from the selection popover's "Open in Dictionary"). */
+  lookup: (term: string) => void;
+  /** Send a question to the follow-up thread (from the selection popover). */
+  ask: (question: string) => void;
+  /** Whether a follow-up thread is mounted and can take questions. */
+  canAsk: () => boolean;
 }
 
 export function Dictionary({
@@ -58,6 +64,8 @@ export function Dictionary({
   const [restoredThread, setRestoredThread] = useState<ChatMessage[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const chatRef = useRef<ChatThreadHandle>(null);
+  const chatSectionRef = useRef<HTMLDivElement>(null);
 
   const entry = useMemo(() => parseDictionaryText(raw), [raw]);
 
@@ -78,8 +86,8 @@ export function Dictionary({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
-  async function runLookup(q: string) {
-    if (!q || status === "streaming") return;
+  async function runLookup(q: string, opts?: { force?: boolean }) {
+    if (!q || (status === "streaming" && !opts?.force)) return;
     const controller = new AbortController();
     abortRef.current = controller;
     syncUrlQuery("dictionary", q);
@@ -140,7 +148,20 @@ export function Dictionary({
       setStatus("done");
       syncUrlQuery("dictionary", record.input);
     },
-  }), []);
+    lookup(newTerm) {
+      const q = newTerm.trim().slice(0, MAX_TERM_LENGTH);
+      if (!q) return;
+      abortRef.current?.abort(); // an in-flight lookup loses to the new one
+      setTerm(q);
+      void runLookup(q, { force: true });
+    },
+    ask(question) {
+      chatRef.current?.ask(question);
+      chatSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    },
+    canAsk: () => chatRef.current !== null,
+    // no deps: lookup() must see the current model/status closures
+  }));
 
   const showCard = lookedUp !== "" && status !== "idle";
   const ipa = phonetics?.ipa || entry.ipa;
@@ -253,16 +274,19 @@ export function Dictionary({
           {debug && lookupDebug && <DebugPanel logs={[lookupDebug]} title="Lookup debug" />}
 
           {status === "done" && (
-            <ChatThread
-              key={lookupId ?? lookedUp}
-              model={model}
-              mode="dictionary"
-              context={chatContext}
-              debug={debug}
-              lookupId={lookupId}
-              initialMessages={restoredThread ?? undefined}
-              placeholder={`Ask more about “${lookedUp}”…`}
-            />
+            <div ref={chatSectionRef}>
+              <ChatThread
+                key={lookupId ?? lookedUp}
+                ref={chatRef}
+                model={model}
+                mode="dictionary"
+                context={chatContext}
+                debug={debug}
+                lookupId={lookupId}
+                initialMessages={restoredThread ?? undefined}
+                placeholder={`Ask more about “${lookedUp}”…`}
+              />
+            </div>
           )}
         </>
       )}

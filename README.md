@@ -9,12 +9,14 @@ A personal, AI-powered English learning app for native Chinese speakers. Two mod
   (IPA + click-to-play audio), the Chinese translation, and real-world example
   sentences. A follow-up box lets you keep asking about the word.
 - **🎓 Teacher** — paste a sentence or paragraphs and get a full Chinese
-  translation. Select any part of the original text to get a popup with an
-  **✨ Explain this** shortcut or a box to ask your own question about that
-  fragment. Selections snap outward to whole words — no need to aim for word
-  edges — and each selected word gets a rounded highlight that stays visible
-  while the popup is open and while the answer streams (Esc or click away to
-  deselect). A follow-up box below digs deeper into the whole text.
+  translation, then dig deeper with the follow-up box below.
+- **Select anywhere** — select text anywhere on the page (the original text,
+  the dictionary entry, a translation, an answer…) and it snaps outward to
+  whole words, each word getting a rounded highlight. A popup offers
+  **✨ Explain this** and a free-form question box (answered in the active
+  mode's follow-up thread), plus **📖 Open in Dictionary** to look the
+  selected words up directly. The highlight stays visible while the popup is
+  open and while the answer streams; Esc or a click away deselects.
 
 Both modes are powered by your choice of Claude or GPT models (selector in the
 header; the choice is remembered in `localStorage`). All LLM calls happen on the

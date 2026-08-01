@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dictionary, type DictionaryHandle } from "@/components/Dictionary";
 import { History } from "@/components/History";
+import { SelectionPopover } from "@/components/SelectionPopover";
 import { Teacher, type TeacherHandle } from "@/components/Teacher";
 import { authClient } from "@/lib/auth-client";
 import { isKnownModel, resolveModel } from "@/lib/models";
@@ -72,12 +73,26 @@ export default function Home() {
 
   const dictionaryRef = useRef<DictionaryHandle>(null);
   const teacherRef = useRef<TeacherHandle>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Reopen a stored entry instantly in its panel — no LLM call.
   function openHistoryEntry(record: LookupRecord) {
     const panel = record.mode === "teacher" ? teacherRef : dictionaryRef;
     panel.current?.restore(record);
     setTab(record.mode);
+  }
+
+  // The selection popover talks to whichever panel is visible.
+  function activePanel() {
+    if (tab === "teacher") return teacherRef.current;
+    if (tab === "dictionary") return dictionaryRef.current;
+    return null;
+  }
+
+  function openInDictionary(term: string) {
+    dictionaryRef.current?.lookup(term);
+    setTab("dictionary");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // Deep links: /?mode=dict&query=hello opens that tab and runs the query.
@@ -98,7 +113,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
+    <div className="relative flex min-h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
         <div className="mx-auto flex min-h-14 w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:py-0">
           <h1 className="text-base font-bold tracking-tight">
@@ -144,7 +159,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 sm:py-6">
+      <main
+        ref={mainRef}
+        data-selection-root
+        className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 sm:py-6"
+      >
         <nav className="mb-4 flex gap-1 rounded-xl bg-neutral-200/60 p-1 sm:mb-6 dark:bg-neutral-900">
           {TABS.map((t) => (
             <button
@@ -196,6 +215,13 @@ export default function Home() {
       <footer className="px-4 pb-6 text-center text-xs text-neutral-400">
         Answers are AI-generated — double-check anything important.
       </footer>
+
+      <SelectionPopover
+        containerRef={mainRef}
+        canExplain={() => activePanel()?.canAsk() ?? false}
+        onAsk={(q) => activePanel()?.ask(q)}
+        onOpenInDict={openInDictionary}
+      />
     </div>
   );
 }

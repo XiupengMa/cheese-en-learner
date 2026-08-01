@@ -1,4 +1,4 @@
-// Word-boundary helpers for the Teacher selection feature. Intl.Segmenter
+// Word-boundary helpers for the select-anywhere feature. Intl.Segmenter
 // keeps contractions ("don't") as one word; segments joined by a hyphen or
 // apostrophe ("well-known", "l'avenir") are stitched back together here.
 
@@ -7,39 +7,41 @@ const JOINERS = new Set(["-", "‑", "'", "’"]);
 const segmenter = new Intl.Segmenter("en", { granularity: "word" });
 
 /**
- * Snap [start, end) outward to whole-word boundaries. Edge whitespace is
- * trimmed, but deliberately selected punctuation ("Hello, world!") is kept —
- * the range only grows when it cuts through the middle of a word.
+ * Snap a selection-start offset outward to the beginning of the word it
+ * lands inside. Leading whitespace is skipped; punctuation is left alone —
+ * the boundary only moves left when it cuts through the middle of a word.
  */
-export function expandToWords(
-  text: string,
-  start: number,
-  end: number
-): [number, number] {
-  while (start < end && /\s/.test(text[start]!)) start++;
-  while (end > start && /\s/.test(text[end - 1]!)) end--;
-  if (start >= end) return [start, start];
-
+export function snapStart(text: string, i: number): number {
+  while (i < text.length && /\s/.test(text[i]!)) i++;
+  if (i >= text.length) return i;
   const segments = segmenter.segment(text);
-  const startSeg = segments.containing(start);
-  if (startSeg?.isWordLike) {
-    start = startSeg.index;
-    while (start >= 2 && JOINERS.has(text[start - 1]!)) {
-      const prev = segments.containing(start - 2);
+  const seg = segments.containing(i);
+  if (seg?.isWordLike) {
+    i = seg.index;
+    while (i >= 2 && JOINERS.has(text[i - 1]!)) {
+      const prev = segments.containing(i - 2);
       if (!prev?.isWordLike) break;
-      start = prev.index;
+      i = prev.index;
     }
   }
-  const endSeg = segments.containing(end - 1);
-  if (endSeg?.isWordLike) {
-    end = endSeg.index + endSeg.segment.length;
-    while (end < text.length - 1 && JOINERS.has(text[end]!)) {
-      const next = segments.containing(end + 1);
+  return i;
+}
+
+/** Mirror of {@link snapStart} for the end offset (exclusive). */
+export function snapEnd(text: string, i: number): number {
+  while (i > 0 && /\s/.test(text[i - 1]!)) i--;
+  if (i <= 0) return i;
+  const segments = segmenter.segment(text);
+  const seg = segments.containing(i - 1);
+  if (seg?.isWordLike) {
+    i = seg.index + seg.segment.length;
+    while (i < text.length - 1 && JOINERS.has(text[i]!)) {
+      const next = segments.containing(i + 1);
       if (!next?.isWordLike) break;
-      end = next.index + next.segment.length;
+      i = next.index + next.segment.length;
     }
   }
-  return [start, end];
+  return i;
 }
 
 /**

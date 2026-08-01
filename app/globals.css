@@ -26,6 +26,25 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* The selection popover draws its own rounded per-word highlight over page
+   content, so the native selection color is hidden there. Form fields keep
+   a visible amber selection — the popover ignores them. */
+@layer base {
+  [data-selection-root] ::selection {
+    background-color: transparent;
+  }
+  [data-selection-root] input::selection,
+  [data-selection-root] textarea::selection {
+    background-color: #fde68a; /* amber-200 */
+  }
+  @media (prefers-color-scheme: dark) {
+    [data-selection-root] input::selection,
+    [data-selection-root] textarea::selection {
+      background-color: rgb(180 83 9 / 0.7); /* amber-700 */
+    }
+  }
+}
+
 /* Tailwind v4 defaults buttons to cursor: default — restore the pointer */
 @layer base {
   button:not(:disabled),
