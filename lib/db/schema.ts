@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -25,6 +26,10 @@ export const user = pgTable("user", {
   // Null = app default; validated against lib/models.ts on write.
   dictionaryModel: text("dictionary_model"),
   teacherModel: text("teacher_model"),
+  // Daily LLM-query allowance. Null = DAILY_QUERY_QUOTA default. Deliberately
+  // NOT a Better Auth additionalField: users must not raise it via updateUser;
+  // bump it per-account with SQL instead.
+  dailyQuota: integer("daily_quota"),
 });
 
 export const session = pgTable("session", {
@@ -116,6 +121,21 @@ export const question = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("question_lookup_idx").on(t.lookupId)]
+);
+
+// Daily query counter, one row per user per UTC day. Incremented atomically
+// (upsert) by lib/quota.ts on every LLM call; old rows are just dead weight
+// and cheap enough to keep.
+export const dailyUsage = pgTable(
+  "daily_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    day: text("day").notNull(), // "YYYY-MM-DD" (UTC)
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })]
 );
 
 // WebAuthn credentials for the @better-auth/passkey plugin (spec from the

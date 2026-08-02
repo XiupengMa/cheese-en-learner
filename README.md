@@ -29,6 +29,12 @@ each result.
 The app is behind a login: sign-up requires an invite code
 (`SIGNUP_INVITE_CODE`), so only people you invite can create an account.
 
+Each account gets **1,000 queries per UTC day** by default — dictionary
+lookups, translations, and follow-up questions all draw from the same pool,
+and requests past the limit get a clear "daily limit reached" error. To give
+an account a different allowance, set its `daily_quota` column:
+`update "user" set daily_quota = 5000 where email = '…';`
+
 ## Tech
 
 - Next.js (App Router) + TypeScript + Tailwind CSS

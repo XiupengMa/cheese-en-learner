@@ -5,6 +5,7 @@ import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { resolveModel } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getSession, unauthorized } from "@/lib/session";
 import type { LookupResponse } from "@/lib/types";
 
@@ -27,6 +28,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    const quota = await consumeQuota(session.user.id);
+    if (!quota.allowed) return quotaExceeded(quota.limit);
 
     const stream = await streamLLM({
       model,

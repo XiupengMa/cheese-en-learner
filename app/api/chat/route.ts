@@ -6,6 +6,7 @@ import { MAX_CONTEXT_LENGTH, MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
 import { resolveModel } from "@/lib/models";
 import { chatSystem } from "@/lib/prompts";
+import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getSession, unauthorized } from "@/lib/session";
 import type { ChatMessage, LearnMode } from "@/lib/types";
 
@@ -40,6 +41,9 @@ export async function POST(req: Request) {
 
     const claimedLookupId =
       typeof body.lookupId === "string" && body.lookupId ? body.lookupId : null;
+
+    const quota = await consumeQuota(session.user.id);
+    if (!quota.allowed) return quotaExceeded(quota.limit);
 
     const stream = await streamLLM({
       model,
