@@ -168,7 +168,17 @@ export function Dictionary({
   const chatContext = `Word/phrase: ${lookedUp}\nPronunciation: ${ipa}\nMeaning: ${entry.meaning}\nChinese: ${entry.chinese}`;
 
   return (
-    <div>
+    // Desktop: the entry on the left, follow-up thread pinned right. The
+    // grid engages as soon as the card shows so the layout doesn't jump
+    // when the thread mounts at the end of streaming.
+    <div
+      className={
+        showCard
+          ? "lg:mx-auto lg:grid lg:max-w-[78rem] lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-6"
+          : "lg:mx-auto lg:max-w-3xl"
+      }
+    >
+      <div className="min-w-0">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -272,23 +282,24 @@ export function Dictionary({
           </article>
 
           {debug && lookupDebug && <DebugPanel logs={[lookupDebug]} title="Lookup debug" />}
-
-          {status === "done" && (
-            <div ref={chatSectionRef}>
-              <ChatThread
-                key={lookupId ?? lookedUp}
-                ref={chatRef}
-                model={model}
-                mode="dictionary"
-                context={chatContext}
-                debug={debug}
-                lookupId={lookupId}
-                initialMessages={restoredThread ?? undefined}
-                placeholder={`Ask more about “${lookedUp}”…`}
-              />
-            </div>
-          )}
         </>
+      )}
+      </div>
+
+      {showCard && status === "done" && (
+        <div ref={chatSectionRef} className="min-w-0 lg:sticky lg:top-20">
+          <ChatThread
+            key={lookupId ?? lookedUp}
+            ref={chatRef}
+            model={model}
+            mode="dictionary"
+            context={chatContext}
+            debug={debug}
+            lookupId={lookupId}
+            initialMessages={restoredThread ?? undefined}
+            placeholder={`Ask more about “${lookedUp}”…`}
+          />
+        </div>
       )}
     </div>
   );

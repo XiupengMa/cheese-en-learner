@@ -115,7 +115,7 @@ export default function Home() {
   return (
     <div className="relative flex min-h-dvh flex-col bg-neutral-50 dark:bg-neutral-950">
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
-        <div className="mx-auto flex min-h-14 w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:py-0">
+        <div className="mx-auto flex min-h-14 w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:py-0 lg:max-w-[80rem]">
           <h1 className="text-base font-bold tracking-tight">
             🧀 Cheese{" "}
             <span className="hidden font-normal text-neutral-400 min-[440px]:inline">
@@ -162,9 +162,9 @@ export default function Home() {
       <main
         ref={mainRef}
         data-selection-root
-        className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 sm:py-6"
+        className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 sm:py-6 lg:max-w-[80rem]"
       >
-        <nav className="mb-4 flex gap-1 rounded-xl bg-neutral-200/60 p-1 sm:mb-6 dark:bg-neutral-900">
+        <nav className="mx-auto mb-4 flex max-w-3xl gap-1 rounded-xl bg-neutral-200/60 p-1 sm:mb-6 dark:bg-neutral-900">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -207,7 +207,7 @@ export default function Home() {
             }
           />
         </div>
-        <div className={tab === "history" ? "" : "hidden"}>
+        <div className={tab === "history" ? "mx-auto max-w-3xl" : "hidden"}>
           <History active={tab === "history"} onOpen={openHistoryEntry} />
         </div>
       </main>

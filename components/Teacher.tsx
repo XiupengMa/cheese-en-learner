@@ -126,7 +126,15 @@ export function Teacher({
     : "";
 
   return (
-    <div>
+    // Desktop: reading material on the left, follow-up thread pinned right.
+    <div
+      className={
+        submittedText
+          ? "lg:mx-auto lg:grid lg:max-w-[78rem] lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-6"
+          : "lg:mx-auto lg:max-w-3xl"
+      }
+    >
+      <div className="min-w-0">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -201,21 +209,24 @@ export function Teacher({
           {debug && translationDebug && (
             <DebugPanel logs={[translationDebug]} title="Translation debug" />
           )}
-
-          <div ref={chatSectionRef}>
-            <ChatThread
-              key={lookupId ?? submittedText}
-              ref={chatRef}
-              model={model}
-              mode="teacher"
-              context={chatContext}
-              debug={debug}
-              lookupId={lookupId}
-              initialMessages={restoredThread ?? undefined}
-              placeholder="Ask about grammar, vocabulary, tone…"
-            />
-          </div>
         </>
+      )}
+      </div>
+
+      {submittedText && (
+        <div ref={chatSectionRef} className="min-w-0 lg:sticky lg:top-20">
+          <ChatThread
+            key={lookupId ?? submittedText}
+            ref={chatRef}
+            model={model}
+            mode="teacher"
+            context={chatContext}
+            debug={debug}
+            lookupId={lookupId}
+            initialMessages={restoredThread ?? undefined}
+            placeholder="Ask about grammar, vocabulary, tone…"
+          />
+        </div>
       )}
     </div>
   );

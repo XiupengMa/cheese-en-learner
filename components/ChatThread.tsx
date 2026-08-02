@@ -131,7 +131,7 @@ export function ChatThread({
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+    <div className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm lg:mt-0 dark:border-neutral-800 dark:bg-neutral-900">
       <p className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-400">
         Follow-up
       </p>
@@ -140,7 +140,7 @@ export function ChatThread({
         <div
           ref={scrollBoxRef}
           onScroll={onScroll}
-          className="mb-3 flex max-h-[28rem] flex-col gap-3 overflow-y-auto pr-1"
+          className="mb-3 flex max-h-[28rem] flex-col gap-3 overflow-y-auto pr-1 lg:max-h-[max(16rem,calc(100dvh-19rem))]"
         >
           {messages.map((msg, i) =>
             msg.role === "user" ? (
