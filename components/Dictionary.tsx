@@ -174,7 +174,7 @@ export function Dictionary({
     <div
       className={
         showCard
-          ? "lg:mx-auto lg:grid lg:max-w-[78rem] lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-6"
+          ? "lg:mx-auto lg:grid lg:max-w-[78rem] lg:grid-cols-2 lg:items-start lg:gap-6"
           : "lg:mx-auto lg:max-w-3xl"
       }
     >
