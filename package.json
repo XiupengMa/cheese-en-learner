@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test tests/*.test.ts tests/*.test.tsx",
     "db:push": "drizzle-kit push",
+    "db:migrate:speed": "node scripts/migrate-speed-preferences.mjs",
     "db:studio": "drizzle-kit studio"
   },
   "overrides": {
@@ -40,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

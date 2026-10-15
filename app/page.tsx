@@ -8,7 +8,7 @@ import { History } from "@/components/History";
 import { SelectionPopover } from "@/components/SelectionPopover";
 import { Teacher, type TeacherHandle } from "@/components/Teacher";
 import { authClient } from "@/lib/auth-client";
-import { isKnownModel, resolveModel } from "@/lib/models";
+import { isKnownModel, isSpeedMode, resolveModel, type SpeedMode } from "@/lib/models";
 import { readUrlQuery } from "@/lib/urlQuery";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import type { LearnMode, LookupRecord } from "@/lib/types";
@@ -48,6 +48,50 @@ export default function Home() {
         console.error("Saving model preference failed:", res.error.message);
       }
     });
+  }
+
+  const [speedOverride, setSpeedOverride] = useState<{
+    userId: string;
+    values: Partial<Record<LearnMode, SpeedMode>>;
+  } | null>(null);
+  const [savingSpeed, setSavingSpeed] = useState(false);
+  const [speedError, setSpeedError] = useState<string | null>(null);
+
+  function speedFor(mode: LearnMode): SpeedMode {
+    const saved = mode === "dictionary"
+      ? session?.user.dictionarySpeed
+      : session?.user.teacherSpeed;
+    const override = speedOverride?.userId === session?.user.id
+      ? speedOverride?.values[mode]
+      : undefined;
+    return override ?? (isSpeedMode(saved) ? saved : "standard");
+  }
+
+  async function setSpeedFor(mode: LearnMode, speed: SpeedMode) {
+    if (!session || savingSpeed) return;
+    const userId = session.user.id;
+    const previousSpeed = speedFor(mode);
+    setSpeedOverride((prev) => ({
+      userId,
+      values: { ...(prev?.userId === userId ? prev.values : {}), [mode]: speed },
+    }));
+    setSavingSpeed(true);
+    setSpeedError(null);
+    try {
+      const patch = mode === "dictionary"
+        ? { dictionarySpeed: speed }
+        : { teacherSpeed: speed };
+      const result = await authClient.updateUser(patch);
+      if (result.error) throw new Error(result.error.message || "Please try again.");
+    } catch (error) {
+      setSpeedOverride((prev) => {
+        if (prev?.userId !== userId) return prev;
+        return { userId, values: { ...prev.values, [mode]: previousSpeed } };
+      });
+      setSpeedError(`Speed preference wasn't saved. ${error instanceof Error ? error.message : "Please try again."}`);
+    } finally {
+      setSavingSpeed(false);
+    }
   }
 
   // One-time adoption of the pre-account preference: earlier versions kept a
@@ -181,11 +225,19 @@ export default function Home() {
         </nav>
 
         {/* All panels stay mounted so switching tabs never loses your work */}
+        {speedError && (
+          <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+            {speedError}
+          </p>
+        )}
         <div className={tab === "dictionary" ? "" : "hidden"}>
           <Dictionary
             ref={dictionaryRef}
             model={dictionaryModel}
             onModelChange={(id) => setModelFor("dictionary", id)}
+            speed={speedFor("dictionary")}
+            onSpeedChange={(speed) => { void setSpeedFor("dictionary", speed); }}
+            speedDisabled={sessionPending || !session || savingSpeed}
             debug={debug}
             initialQuery={
               !sessionPending && urlQuery?.mode === "dictionary"
@@ -199,6 +251,9 @@ export default function Home() {
             ref={teacherRef}
             model={teacherModel}
             onModelChange={(id) => setModelFor("teacher", id)}
+            speed={speedFor("teacher")}
+            onSpeedChange={(speed) => { void setSpeedFor("teacher", speed); }}
+            speedDisabled={sessionPending || !session || savingSpeed}
             debug={debug}
             initialQuery={
               !sessionPending && urlQuery?.mode === "teacher"

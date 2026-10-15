@@ -26,6 +26,8 @@ export const user = pgTable("user", {
   // Null = app default; validated against lib/models.ts on write.
   dictionaryModel: text("dictionary_model"),
   teacherModel: text("teacher_model"),
+  dictionarySpeed: text("dictionary_speed").notNull().default("standard"),
+  teacherSpeed: text("teacher_speed").notNull().default("standard"),
   // Daily LLM-query allowance. Null = DAILY_QUERY_QUOTA default. Deliberately
   // NOT a Better Auth additionalField: users must not raise it via updateUser;
   // bump it per-account with SQL instead.

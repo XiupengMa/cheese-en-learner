@@ -3,7 +3,7 @@ import { lookup } from "@/lib/db/schema";
 import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
-import { resolveModel } from "@/lib/models";
+import { resolveModel, resolveSpeed } from "@/lib/models";
 import { DICTIONARY_SYSTEM } from "@/lib/prompts";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getSession, unauthorized } from "@/lib/session";
@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const term = String(body.term ?? "").trim();
     const model = resolveModel(body.model);
+    const speed = resolveSpeed(model, body.speed ?? session.user.dictionarySpeed);
     if (!term) {
       return Response.json({ error: "Please enter a word or phrase." }, { status: 400 });
     }
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
 
     const llmStream = await streamLLM({
       model,
+      speed,
       system: DICTIONARY_SYSTEM,
       messages: [{ role: "user", content: term }],
       effort: "low",

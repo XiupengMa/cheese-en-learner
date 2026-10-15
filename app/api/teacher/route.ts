@@ -3,7 +3,7 @@ import { lookup } from "@/lib/db/schema";
 import { withHistorySave } from "@/lib/historyLog";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
-import { resolveModel } from "@/lib/models";
+import { resolveModel, resolveSpeed } from "@/lib/models";
 import { TEACHER_SYSTEM } from "@/lib/prompts";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getSession, unauthorized } from "@/lib/session";
@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const text = String(body.text ?? "").trim();
     const model = resolveModel(body.model);
+    const speed = resolveSpeed(model, body.speed ?? session.user.teacherSpeed);
     if (!text) {
       return Response.json({ error: "Please enter some text to translate." }, { status: 400 });
     }
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
 
     const stream = await streamLLM({
       model,
+      speed,
       system: TEACHER_SYSTEM,
       messages: [{ role: "user", content: text }],
       effort: "low",

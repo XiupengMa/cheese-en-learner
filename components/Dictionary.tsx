@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react
 import type { Ref } from "react";
 import { parseDictionaryText } from "@/lib/dictionaryParse";
 import { MAX_TERM_LENGTH } from "@/lib/limits";
+import type { SpeedMode } from "@/lib/models";
 import { submitOnModEnter } from "@/lib/keySubmit";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
@@ -13,6 +14,7 @@ import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
 import { Markdown } from "./Markdown";
 import { ModelSelect } from "./ModelSelect";
+import { SpeedSelect } from "./SpeedSelect";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -41,6 +43,9 @@ export interface DictionaryHandle {
 export function Dictionary({
   model,
   onModelChange,
+  speed,
+  onSpeedChange,
+  speedDisabled,
   debug,
   initialQuery,
   ref,
@@ -48,6 +53,9 @@ export function Dictionary({
   model: string;
   /** Persist a new model choice for this mode (account-level preference). */
   onModelChange?: (id: string) => void;
+  speed: SpeedMode;
+  onSpeedChange?: (speed: SpeedMode) => void;
+  speedDisabled?: boolean;
   debug?: boolean;
   /** Deep-linked query (?mode=dict&query=…) — looked up automatically. */
   initialQuery?: string;
@@ -104,7 +112,7 @@ export function Dictionary({
       const res = await fetch("/api/dictionary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ term: q, model }),
+        body: JSON.stringify({ term: q, model, speed }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -205,8 +213,11 @@ export function Dictionary({
       </form>
 
       {onModelChange && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
           <ModelSelect value={model} onChange={onModelChange} />
+          {onSpeedChange && (
+            <SpeedSelect model={model} value={speed} onChange={onSpeedChange} disabled={speedDisabled} />
+          )}
         </div>
       )}
 
@@ -292,6 +303,7 @@ export function Dictionary({
             key={lookupId ?? lookedUp}
             ref={chatRef}
             model={model}
+            speed={speed}
             mode="dictionary"
             context={chatContext}
             debug={debug}

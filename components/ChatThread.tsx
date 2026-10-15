@@ -4,6 +4,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "r
 import type { Ref } from "react";
 import { submitOnModEnter } from "@/lib/keySubmit";
 import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
+import type { SpeedMode } from "@/lib/models";
 import { readEventStream } from "@/lib/streamClient";
 import type { ChatMessage, LearnMode, LLMDebug } from "@/lib/types";
 import { DebugPanel } from "./DebugPanel";
@@ -15,6 +16,7 @@ export interface ChatThreadHandle {
 
 interface ChatThreadProps {
   model: string;
+  speed: SpeedMode;
   mode: LearnMode;
   context: string;
   placeholder?: string;
@@ -28,6 +30,7 @@ interface ChatThreadProps {
 
 export function ChatThread({
   model,
+  speed,
   mode,
   context,
   placeholder,
@@ -84,6 +87,7 @@ export function ChatThread({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
+            speed,
             mode,
             context,
             messages: history,
@@ -118,7 +122,7 @@ export function ChatThread({
         setBusy(false);
       }
     },
-    [model, mode, context, lookupId]
+    [model, speed, mode, context, lookupId]
   );
 
   useImperativeHandle(ref, () => ({ ask }), [ask]);

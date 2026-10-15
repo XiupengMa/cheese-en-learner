@@ -18,9 +18,31 @@ A personal, AI-powered English learning app for native Chinese speakers. Two mod
   selected words up directly. The highlight stays visible while the popup is
   open and while the answer streams; Esc or a click away deselects.
 
-Both modes are powered by your choice of Claude or GPT models (selector in the
-header; the choice is remembered in `localStorage`). All LLM calls happen on the
+Both modes are powered by your choice of Claude or GPT models. Model and speed
+selectors appear below each input; choices are saved to your account separately
+for Dictionary and Teacher, including across devices. All LLM calls happen on the
 backend — API keys never reach the browser.
+
+**Speed** defaults to **Standard**. **Fast** uses the provider's faster inference
+tier at a higher price, with the same model and reasoning effort. It applies to
+lookups, translations, and follow-up questions. Unsupported models show a disabled
+Standard selector; your Fast preference is retained for when you switch back to
+a supported model. Save failures are displayed and the selector reverts.
+
+- Claude Opus 5.5 supports [Anthropic fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode)
+  (`speed: "fast"` with the `fast-mode-2026-02-01` beta header). It requires
+  research-preview access on the server's Anthropic API account. Fable 5.1,
+  Sonnet 5.5, and Haiku 5.5 run at Standard speed.
+- GPT-6 Astra, GPT-6.1 Sol, and GPT-6 Luna support
+  [OpenAI Fast mode](https://developers.openai.com/api/docs/guides/fast-mode).
+  Requests use `service_tier: "priority"`, the supported Fast mode alias in the
+  installed SDK, or explicit `"default"` for Standard. The actual tier is shown
+  in Debug because OpenAI can downgrade requests when capacity is limited.
+
+Before deploying this update to an existing database, run
+`npm run db:migrate:speed` with its `DATABASE_URL` configured. This adds the two
+account preference columns and sets existing accounts to Standard without changing
+other tables. New installations can use the usual `npm run db:push` instead.
 
 A **Debug** toggle in the header reveals the raw request/response exchanged
 between this server and the LLM provider (exact payload, usage, latency) under

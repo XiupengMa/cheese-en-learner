@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { getModel, type ModelOption } from "./models";
+import { getModel, resolveSpeed, type ModelOption, type SpeedMode } from "./models";
 import type { ChatMessage, LLMDebug, StreamEvent } from "./types";
 
 export type Effort = "low" | "medium" | "high";
@@ -16,6 +16,7 @@ interface LLMParams {
    * Ignored on models that don't support the parameter.
    */
   effort?: Effort;
+  speed?: SpeedMode;
 }
 
 export interface LLMResult {
@@ -45,7 +46,7 @@ function openaiClient(): OpenAI {
 
 function anthropicPayload(
   m: ModelOption,
-  { system, messages, maxTokens, effort }: Required<Pick<LLMParams, "system" | "messages">> & { maxTokens: number; effort?: Effort }
+  { system, messages, maxTokens, effort, speed }: Required<Pick<LLMParams, "system" | "messages">> & { maxTokens: number; effort?: Effort; speed?: SpeedMode }
 ) {
   return {
     model: m.id,
@@ -53,6 +54,9 @@ function anthropicPayload(
     system,
     messages,
     ...(m.supportsEffort && effort ? { output_config: { effort } } : {}),
+    ...(resolveSpeed(m.id, speed) === "fast"
+      ? { speed: "fast" as const, betas: ["fast-mode-2026-02-01"] }
+      : {}),
   };
 }
 
@@ -66,13 +70,18 @@ export async function completeText({
   messages,
   maxTokens = 16000,
   effort,
+  speed = "standard",
 }: LLMParams): Promise<LLMResult> {
   const m = getModel(model);
+  const fast = resolveSpeed(model, speed) === "fast";
   const started = Date.now();
 
   if (m.provider === "anthropic") {
-    const payload = anthropicPayload(m, { system, messages, maxTokens, effort });
-    const response = await anthropicClient().messages.create(payload);
+    const payload = anthropicPayload(m, { system, messages, maxTokens, effort, speed });
+    const client = anthropicClient();
+    const response = fast
+      ? await client.beta.messages.create(payload)
+      : await client.messages.create(payload);
     const text = response.content
       .filter((block) => block.type === "text")
       .map((block) => block.text)
@@ -89,6 +98,9 @@ export async function completeText({
   const payload = {
     model: m.id,
     max_completion_tokens: maxTokens,
+    // "priority" is the Fast mode alias supported by our installed SDK.
+    // Explicit "default" keeps Standard independent of project settings.
+    service_tier: fast ? "priority" as const : "default" as const,
     ...(m.supportsReasoningEffort && effort ? { reasoning_effort: effort } : {}),
     messages: openaiMessages(system, messages),
   };
@@ -98,7 +110,7 @@ export async function completeText({
     text,
     debug: {
       request: { provider: "openai", endpoint: "POST /v1/chat/completions", payload },
-      response: { text, usage: completion.usage, durationMs: Date.now() - started },
+      response: { text, usage: completion.usage, serviceTier: completion.service_tier, durationMs: Date.now() - started },
     },
   };
 }
@@ -115,8 +127,10 @@ export async function streamLLM({
   messages,
   maxTokens = 16000,
   effort,
+  speed = "standard",
 }: LLMParams): Promise<ReadableStream<Uint8Array>> {
   const m = getModel(model);
+  const fast = resolveSpeed(model, speed) === "fast";
   const encoder = new TextEncoder();
   const started = Date.now();
 
@@ -124,8 +138,11 @@ export async function streamLLM({
     controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
 
   if (m.provider === "anthropic") {
-    const payload = anthropicPayload(m, { system, messages, maxTokens, effort });
-    const stream = anthropicClient().messages.stream(payload);
+    const payload = anthropicPayload(m, { system, messages, maxTokens, effort, speed });
+    const client = anthropicClient();
+    const stream = fast
+      ? client.beta.messages.stream(payload)
+      : client.messages.stream(payload);
     return new ReadableStream({
       async start(controller) {
         let text = "";
@@ -166,6 +183,7 @@ export async function streamLLM({
     stream: true as const,
     stream_options: { include_usage: true },
     max_completion_tokens: maxTokens,
+    service_tier: fast ? "priority" as const : "default" as const,
     ...(m.supportsReasoningEffort && effort ? { reasoning_effort: effort } : {}),
     messages: openaiMessages(system, messages),
   };
@@ -174,9 +192,11 @@ export async function streamLLM({
     async start(controller) {
       let text = "";
       let usage: unknown;
+      let serviceTier: string | null | undefined;
       try {
         for await (const chunk of completion) {
           if (chunk.usage) usage = chunk.usage;
+          if (chunk.service_tier) serviceTier = chunk.service_tier;
           const delta = chunk.choices[0]?.delta?.content;
           if (delta) {
             text += delta;
@@ -187,7 +207,7 @@ export async function streamLLM({
           type: "done",
           debug: {
             request: { provider: "openai", endpoint: "POST /v1/chat/completions (stream)", payload },
-            response: { text, usage, durationMs: Date.now() - started },
+            response: { text, usage, serviceTier, durationMs: Date.now() - started },
           },
         });
       } catch (err) {

@@ -4,7 +4,7 @@ import { lookup, question } from "@/lib/db/schema";
 import { withHistorySave } from "@/lib/historyLog";
 import { MAX_CONTEXT_LENGTH, MAX_MESSAGE_LENGTH } from "@/lib/limits";
 import { streamLLM } from "@/lib/llm";
-import { resolveModel } from "@/lib/models";
+import { resolveModel, resolveSpeed } from "@/lib/models";
 import { chatSystem } from "@/lib/prompts";
 import { consumeQuota, quotaExceeded } from "@/lib/quota";
 import { getSession, unauthorized } from "@/lib/session";
@@ -22,6 +22,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const model = resolveModel(body.model);
     const mode: LearnMode = body.mode === "teacher" ? "teacher" : "dictionary";
+    const savedSpeed = mode === "teacher" ? session.user.teacherSpeed : session.user.dictionarySpeed;
+    const speed = resolveSpeed(model, body.speed ?? savedSpeed);
     const context = String(body.context ?? "").slice(0, MAX_CONTEXT_LENGTH);
     const rawMessages: ChatMessage[] = Array.isArray(body.messages) ? body.messages : [];
 
@@ -47,6 +49,7 @@ export async function POST(req: Request) {
 
     const stream = await streamLLM({
       model,
+      speed,
       system: chatSystem(mode, context),
       messages,
       effort: "low",

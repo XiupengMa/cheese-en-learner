@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 import { submitOnModEnter } from "@/lib/keySubmit";
 import { MAX_TEXT_LENGTH } from "@/lib/limits";
+import type { SpeedMode } from "@/lib/models";
 import { readEventStream } from "@/lib/streamClient";
 import { syncUrlQuery } from "@/lib/urlQuery";
 import type { ChatMessage, LLMDebug, LookupRecord } from "@/lib/types";
@@ -11,6 +12,7 @@ import { AudioButton } from "./AudioButton";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { DebugPanel } from "./DebugPanel";
 import { ModelSelect } from "./ModelSelect";
+import { SpeedSelect } from "./SpeedSelect";
 
 export interface TeacherHandle {
   /** Show a stored history entry — no LLM call, no fetch. */
@@ -24,6 +26,9 @@ export interface TeacherHandle {
 export function Teacher({
   model,
   onModelChange,
+  speed,
+  onSpeedChange,
+  speedDisabled,
   debug,
   initialQuery,
   ref,
@@ -31,6 +36,9 @@ export function Teacher({
   model: string;
   /** Persist a new model choice for this mode (account-level preference). */
   onModelChange?: (id: string) => void;
+  speed: SpeedMode;
+  onSpeedChange?: (speed: SpeedMode) => void;
+  speedDisabled?: boolean;
   debug?: boolean;
   /** Deep-linked text (?mode=teacher&query=…) — translated automatically. */
   initialQuery?: string;
@@ -76,7 +84,7 @@ export function Teacher({
       const res = await fetch("/api/teacher", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: source, model }),
+        body: JSON.stringify({ text: source, model, speed }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -150,12 +158,13 @@ export function Teacher({
           placeholder="Paste an English sentence or paragraphs to study…"
           className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3 text-base leading-relaxed shadow-sm outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-700 dark:bg-neutral-900"
         />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          {onModelChange ? (
-            <ModelSelect value={model} onChange={onModelChange} />
-          ) : (
-            <span />
-          )}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {onModelChange && <ModelSelect value={model} onChange={onModelChange} />}
+            {onSpeedChange && (
+              <SpeedSelect model={model} value={speed} onChange={onSpeedChange} disabled={speedDisabled} />
+            )}
+          </div>
           <button
             type="submit"
             disabled={translating || !text.trim()}
@@ -219,6 +228,7 @@ export function Teacher({
             key={lookupId ?? submittedText}
             ref={chatRef}
             model={model}
+            speed={speed}
             mode="teacher"
             context={chatContext}
             debug={debug}

@@ -37,6 +37,8 @@ export interface LLMDebug {
   response: {
     text: string;
     usage?: unknown;
+    /** OpenAI's actual processing tier; may differ from the requested tier. */
+    serviceTier?: string | null;
     durationMs: number;
   };
 }

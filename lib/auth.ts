@@ -5,7 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
-import { isKnownModel } from "./models";
+import { isKnownModel, speedModeSchema } from "./models";
 
 // Constant-time comparison; hashing first makes unequal lengths safe.
 function safeEqual(a: string, b: string): boolean {
@@ -54,6 +54,18 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         validator: { input: modelIdSchema },
+      },
+      dictionarySpeed: {
+        type: "string",
+        required: false,
+        defaultValue: "standard",
+        validator: { input: speedModeSchema },
+      },
+      teacherSpeed: {
+        type: "string",
+        required: false,
+        defaultValue: "standard",
+        validator: { input: speedModeSchema },
       },
     },
   },
