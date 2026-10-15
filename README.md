@@ -103,3 +103,10 @@ setup above, `DATABASE_URL` is
 The model picker is defined in [`lib/models.ts`](lib/models.ts). Add or remove
 entries there (any Anthropic Messages API model or OpenAI Chat Completions
 model works).
+
+Last refreshed on **2026-10-14** using the official
+[Claude model catalog](https://platform.claude.com/docs/en/models/overview) and
+[OpenAI model catalog](https://developers.openai.com/api/docs/models). The picker
+includes Claude Fable 5.1, Opus/Sonnet/Haiku 5.5, GPT-6 Astra/Luna, and
+GPT-6.1 Sol. The default is Claude Opus 5.5. Saved preferences for removed models
+fall back to the default.
